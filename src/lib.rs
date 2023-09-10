@@ -1,15 +1,20 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
+#![no_std]
+#![doc = include_str!("../README.md")]
+
+pub extern crate alloc;
+
+use alloc::collections::{BTreeSet, VecDeque};
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
-use std::collections::{HashSet, VecDeque};
-use std::ops::BitXorAssign;
-use std::str;
-use std::string::String;
-use std::vec::Vec;
+use core::ops::BitXorAssign;
+use core::{iter, str};
 
-const MAX_U64: u64 = core::u64::MAX;
+const MAX_U64: u64 = u64::MAX;
 const BUCKETS: usize = 16;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -306,7 +311,7 @@ impl Negentropy {
                 2 => {
                     // IdList
                     let num_ids: u64 = self.decode_var_int(&mut query)?;
-                    let mut their_elems = HashSet::new();
+                    let mut their_elems = BTreeSet::new();
 
                     for _ in 0..num_ids {
                         let e = self.get_bytes(&mut query, self.id_size).unwrap();
@@ -466,7 +471,7 @@ impl Negentropy {
                 let bucket_end: Vec<XorElem> = if i < buckets_with_extra {
                     curr.clone()
                         .take(items_per_bucket)
-                        .chain(std::iter::once(curr.clone().peek().unwrap().clone()))
+                        .chain(iter::once(curr.clone().peek().unwrap().clone()))
                         .collect()
                 } else {
                     curr.clone().take(items_per_bucket).collect()
@@ -671,6 +676,8 @@ impl Negentropy {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]
