@@ -457,8 +457,8 @@ impl Negentropy {
         } else {
             let items_per_bucket = num_elems / BUCKETS;
             let buckets_with_extra = num_elems % BUCKETS;
-            let mut curr = range.clone().peekable();
-            let mut prev_bound: XorElem = curr.peek().cloned().unwrap_or(XorElem::new());
+            let mut curr = range.peekable();
+            let mut prev_bound: XorElem = curr.peek().cloned().unwrap_or_default();
 
             for i in 0..BUCKETS {
                 let mut our_xor_set = XorElem::new();
@@ -501,7 +501,7 @@ impl Negentropy {
             }
 
             if let Some(output) = outputs.back_mut() {
-                output.end = upper_bound.clone();
+                output.end = upper_bound;
             }
         }
 

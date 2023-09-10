@@ -10,7 +10,7 @@ fn main() {
     client.add_item(1, "bbbbbbbbbbbbbbbb").unwrap();
     client.seal().unwrap();
     let init_output = client.initiate().unwrap();
-    println!("Initiator Output: {init_output}");
+    println!("Initiator Output: {}", init_output);
 
     // Relay
     let mut relay = Negentropy::new(16, 0).unwrap();
@@ -30,6 +30,6 @@ fn main() {
         .reconcile_with_ids(&reconcile_output, &mut have_ids, &mut need_ids)
         .unwrap();
     println!("Reconcile Output with IDs: {}", reconcile_output_with_ids);
-    println!("Have IDs: {have_ids:?}");
-    println!("Need IDs: {need_ids:?}");
+    println!("Have IDs: {:?}", have_ids);
+    println!("Need IDs: {:?}", need_ids);
 }
