@@ -156,6 +156,7 @@ struct BoundOutput {
 }
 
 /// Negentropy
+#[derive(Debug, Clone)]
 pub struct Negentropy {
     id_size: u64,
     frame_size_limit: Option<u64>,
@@ -753,5 +754,16 @@ mod tests {
                 String::from("cccccccccccccccc"),
             ]
         )
+    }
+
+    #[test]
+    fn test_invalid_id_size() {
+        assert_eq!(Negentropy::new(33, None).unwrap_err(), Error::InvalidIdSize);
+
+        let mut client = Negentropy::new(16, None).unwrap();
+        assert_eq!(
+            client.add_item(0, "item").unwrap_err(),
+            Error::InvalidIdSize
+        );
     }
 }
