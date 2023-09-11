@@ -1,5 +1,9 @@
 # Negentropy
 
+[![crates.io](https://img.shields.io/crates/v/negentropy.svg)](https://crates.io/crates/negentropy)
+[![crates.io - Downloads](https://img.shields.io/crates/d/negentropy)](https://crates.io/crates/negentropy)
+[![MIT](https://img.shields.io/crates/l/negentropy.svg)](./LICENSE)
+
 ## Description
 
 Rust implementation of the [negentropy](https://github.com/hoytech/negentropy) set-reconcilliation protocol.
