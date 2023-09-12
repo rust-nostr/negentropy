@@ -364,7 +364,7 @@ impl Negentropy {
                         let k = self.items[i].get_id();
                         if !their_elems.contains(k) {
                             if self.is_initiator {
-                                have_ids.push(hex::encode(k));
+                                have_ids.push(hex::encode(k)?);
                             }
                         } else {
                             their_elems.remove(k);
@@ -373,7 +373,7 @@ impl Negentropy {
 
                     if self.is_initiator {
                         for k in their_elems.into_iter() {
-                            need_ids.push(hex::encode(k));
+                            need_ids.push(hex::encode(k)?);
                         }
                     } else {
                         let mut response_have_ids: Vec<&[u8]> = Vec::new();
@@ -587,7 +587,7 @@ impl Negentropy {
             output.extend(self.encode_var_int(4)); // mode = Continue
         }
 
-        Ok(hex::encode(output))
+        Ok(hex::encode(output)?)
     }
 
     fn get_bytes(&self, encoded: &mut &[u8], n: u64) -> Result<Vec<u8>, Error> {

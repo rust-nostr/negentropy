@@ -7,6 +7,8 @@ use core::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
+    /// Invalid char
+    InvalidChar,
     /// An invalid character was found
     InvalidHexCharacter { c: char, index: usize },
     /// A hex string's length needs to be even, as two digits correspond to
@@ -20,6 +22,7 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidChar => write!(f, "Invalid char"),
             Self::InvalidHexCharacter { c, index } => {
                 write!(f, "Invalid character {} at position {}", c, index)
             }
@@ -28,17 +31,17 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn encode<T>(data: T) -> String
+pub fn encode<T>(data: T) -> Result<String, Error>
 where
     T: AsRef<[u8]>,
 {
     let bytes: &[u8] = data.as_ref();
     let mut hex = String::with_capacity(2 * bytes.len());
     for byte in bytes.iter() {
-        hex.push(char::from_digit((byte >> 4) as u32, 16).unwrap());
-        hex.push(char::from_digit((byte & 0xF) as u32, 16).unwrap());
+        hex.push(char::from_digit((byte >> 4) as u32, 16).ok_or(Error::InvalidChar)?);
+        hex.push(char::from_digit((byte & 0xF) as u32, 16).ok_or(Error::InvalidChar)?);
     }
-    hex.to_lowercase()
+    Ok(hex.to_lowercase())
 }
 
 const fn val(c: u8, idx: usize) -> Result<u8, Error> {
@@ -81,7 +84,7 @@ mod test {
 
     #[test]
     fn test_encode() {
-        assert_eq!(encode("foobar"), "666f6f626172");
+        assert_eq!(encode("foobar").unwrap(), "666f6f626172");
     }
 
     #[test]
