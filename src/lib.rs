@@ -23,7 +23,6 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt;
-use core::iter;
 use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
@@ -461,7 +460,6 @@ impl Negentropy {
         while outputs.len() > 0 {
             self.pending_outputs.push_front(outputs.pop_back().unwrap());
         }
-        //self.pending_outputs.extend(outputs.into_iter().rev());
 
         Ok(())
     }
@@ -533,41 +531,29 @@ impl Negentropy {
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
-            let lower: XorElem = items.first().copied().unwrap_or_default();
-            let mut prev_bound: XorElem = lower;
-            let bucket_end = items.iter().copied().take(items_per_bucket);
+            let mut curr : usize = 0;
+            let mut prev_bound = items.iter().nth(0).unwrap();
 
             for i in 0..BUCKETS {
                 let mut our_xor_set: XorElem = XorElem::new();
+                let bucket_end : usize = curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
 
-                let bucket_end = bucket_end.clone();
-                if i < buckets_with_extra {
-                    for elem in bucket_end.chain(iter::once(lower)) {
-                        our_xor_set ^= elem;
-                    }
-                } else {
-                    for elem in bucket_end {
-                        our_xor_set ^= elem;
-                    }
-                };
+                while curr != bucket_end {
+                    our_xor_set ^= items[curr];
+                    curr += 1;
+                }
 
                 let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size as usize);
                 payload.extend(self.encode_mode(Mode::Fingerprint));
                 payload.extend(our_xor_set.get_id_subsize(self.id_size));
 
-                let next_bound: XorElem = if i == 0 {
-                    lower_bound
-                } else {
-                    self.get_minimal_bound(&prev_bound, &lower)?
-                };
-
                 outputs.push_back(BoundOutput {
-                    start: if i == 0 { lower_bound } else { prev_bound },
-                    end: upper_bound,
+                    start: if i == 0 { lower_bound } else { *prev_bound },
+                    end: if bucket_end == items.len() { upper_bound } else { self.get_minimal_bound(&items[curr-1], &items[curr])? },
                     payload,
                 });
 
-                prev_bound = next_bound;
+                prev_bound = &outputs.back().unwrap().end;
             }
 
             if let Some(output) = outputs.back_mut() {
@@ -583,7 +569,7 @@ impl Negentropy {
         let mut curr_bound: XorElem = XorElem::new();
         let mut last_timestamp_out: u64 = 0;
 
-        self.pending_outputs.make_contiguous().sort_by(|a, b| b.start.cmp(&a.start));
+        self.pending_outputs.make_contiguous().sort_by(|a, b| a.start.cmp(&b.start));
 
         while let Some(p) = self.pending_outputs.front() {
             let mut o: Vec<u8> = Vec::new();
@@ -695,6 +681,12 @@ impl Negentropy {
         while n > 0 {
             o.push((n & 0x7F) as u8);
             n >>= 7;
+        }
+
+        o.reverse();
+
+        for i in 0..(o.len() - 1) {
+            o[i] |= 0x80;
         }
 
         o
