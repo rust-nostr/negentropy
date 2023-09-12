@@ -4,9 +4,13 @@
 //! Rust implementation of the negentropy set-reconcilliation protocol.
 
 #![warn(missing_docs)]
+#![cfg_attr(bench, feature(test))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
+
+#[cfg(bench)]
+extern crate test;
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -822,5 +826,136 @@ mod tests {
             client.add_item(0, "abcdef").unwrap_err(),
             Error::IdSizeNotMatch
         );
+    }
+}
+
+#[cfg(bench)]
+mod benches {
+    use test::{black_box, Bencher};
+
+    use super::Negentropy;
+
+    const ID_SIZE: u8 = 16;
+    const FRAME_SIZE_LIMIT: Option<u64> = None;
+    const ITEMS_LEN: usize = 100_000;
+
+    #[bench]
+    pub fn add_item(bh: &mut Bencher) {
+        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        bh.iter(|| {
+            black_box(client.add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).unwrap();
+        });
+    }
+
+    #[bench]
+    pub fn initiate_100_000_items(bh: &mut Bencher) {
+        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
+            .into_iter()
+            .enumerate()
+        {
+            client.add_item(index as u64, item).unwrap();
+        }
+        client.seal().unwrap();
+        bh.iter(|| {
+            black_box(client.initiate()).unwrap();
+        });
+    }
+
+    #[bench]
+    pub fn reconcile_100_000_items(bh: &mut Bencher) {
+        // Client
+        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
+            client.add_item(index as u64, item).unwrap();
+        }
+        client.seal().unwrap();
+        let init_output = client.initiate().unwrap();
+
+        let mut relay = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
+            .into_iter()
+            .enumerate()
+        {
+            relay.add_item(index as u64, item).unwrap();
+        }
+        relay.seal().unwrap();
+
+        bh.iter(|| {
+            black_box(relay.reconcile(&init_output)).unwrap();
+        });
+    }
+
+    #[bench]
+    pub fn final_reconciliation_100_000_items(bh: &mut Bencher) {
+        // Client
+        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
+            client.add_item(index as u64, item).unwrap();
+        }
+        client.seal().unwrap();
+        let init_output = client.initiate().unwrap();
+
+        let mut relay = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
+            .into_iter()
+            .enumerate()
+        {
+            relay.add_item(index as u64, item).unwrap();
+        }
+        relay.seal().unwrap();
+        let reconcile_output = relay.reconcile(&init_output).unwrap();
+
+        bh.iter(|| {
+            let mut have_ids = Vec::new();
+            let mut need_ids = Vec::new();
+            black_box(client.reconcile_with_ids(&reconcile_output, &mut have_ids, &mut need_ids))
+                .unwrap();
+        });
+    }
+
+    fn generate_combinations(characters: &str, length: usize, max: usize) -> Vec<String> {
+        let mut combinations = Vec::new();
+        let mut current = String::new();
+        generate_combinations_recursive(
+            &mut combinations,
+            &mut current,
+            characters,
+            length,
+            0,
+            max,
+        );
+        combinations
+    }
+
+    fn generate_combinations_recursive(
+        combinations: &mut Vec<String>,
+        current: &mut String,
+        characters: &str,
+        length: usize,
+        index: usize,
+        max: usize,
+    ) {
+        if length == 0 {
+            combinations.push(current.clone());
+            return;
+        }
+
+        for char in characters.chars() {
+            if combinations.len() < max {
+                current.push(char);
+                generate_combinations_recursive(
+                    combinations,
+                    current,
+                    characters,
+                    length - 1,
+                    index + 1,
+                    max,
+                );
+                current.pop();
+            } else {
+                return;
+            }
+        }
     }
 }

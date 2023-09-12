@@ -8,6 +8,10 @@
 
 Rust implementation of the [negentropy](https://github.com/hoytech/negentropy) set-reconcilliation protocol.
 
+## Benchmarks
+
+To run the benchmarks use: `make bench`
+
 ## Minimum Supported Rust Version (MSRV)
 
 These crates are built with the Rust language version `2018` and require a minimum compiler version of `1.52.1`
