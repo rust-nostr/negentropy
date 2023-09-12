@@ -11,10 +11,10 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
-use alloc::collections::BTreeSet as AllocSet;
+use alloc::collections::BTreeSet;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
@@ -22,7 +22,7 @@ use core::fmt;
 use core::iter;
 use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
-use std::collections::HashSet as AllocSet;
+use std::collections::HashSet;
 
 mod hex;
 
@@ -380,7 +380,11 @@ impl Negentropy {
                 }
                 Mode::IdList => {
                     let num_ids: u64 = self.decode_var_int(&mut query)?;
-                    let mut their_elems: AllocSet<Vec<u8>> = AllocSet::new();
+                    #[cfg(feature = "std")]
+                    let mut their_elems: HashSet<Vec<u8>> =
+                        HashSet::with_capacity(num_ids as usize);
+                    #[cfg(not(feature = "std"))]
+                    let mut their_elems: BTreeSet<Vec<u8>> = BTreeSet::new();
 
                     for _ in 0..num_ids {
                         let e: Vec<u8> = self.get_bytes(&mut query, self.id_size)?;
@@ -403,10 +407,10 @@ impl Negentropy {
                             need_ids.push(hex::encode(k)?);
                         }
                     } else {
-                        let mut response_have_ids: Vec<&[u8]> = Vec::new();
-                        let mut it = lower;
-                        let mut did_split = false;
-                        let mut split_bound = XorElem::new();
+                        let mut response_have_ids: Vec<&[u8]> = Vec::with_capacity(100);
+                        let mut it: usize = lower;
+                        let mut did_split: bool = false;
+                        let mut split_bound: XorElem = XorElem::new();
 
                         while it < upper {
                             let k: &[u8] = self.items[it].get_id();
@@ -466,9 +470,10 @@ impl Negentropy {
         curr_bound: &XorElem,
         response_have_ids: &mut Vec<&[u8]>,
     ) -> Result<(), Error> {
-        let mut payload: Vec<u8> = Vec::new();
+        let len: usize = response_have_ids.len();
+        let mut payload: Vec<u8> = Vec::with_capacity(10 + 10 + len);
         payload.extend(self.encode_mode(Mode::IdList));
-        payload.extend(self.encode_var_int(response_have_ids.len() as u64));
+        payload.extend(self.encode_var_int(len as u64));
 
         for id in response_have_ids.iter() {
             payload.extend_from_slice(id);
@@ -504,7 +509,7 @@ impl Negentropy {
         let num_elems: usize = items.len();
 
         if num_elems < DOUBLE_BUCKETS {
-            let mut payload: Vec<u8> = Vec::new();
+            let mut payload: Vec<u8> = Vec::with_capacity(10 + 10 + num_elems);
             payload.extend(self.encode_mode(Mode::IdList));
             payload.extend(self.encode_var_int(num_elems as u64));
 
@@ -520,25 +525,25 @@ impl Negentropy {
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
-            let lower: XorElem = items.first().cloned().unwrap_or_default();
+            let lower: XorElem = items.first().copied().unwrap_or_default();
             let mut prev_bound: XorElem = lower;
-            let bucket_end = items.iter().take(items_per_bucket);
+            let bucket_end = items.iter().copied().take(items_per_bucket);
 
             for i in 0..BUCKETS {
                 let mut our_xor_set: XorElem = XorElem::new();
 
                 let bucket_end = bucket_end.clone();
                 if i < buckets_with_extra {
-                    for elem in bucket_end.chain(iter::once(&lower)) {
-                        our_xor_set ^= *elem;
+                    for elem in bucket_end.chain(iter::once(lower)) {
+                        our_xor_set ^= elem;
                     }
                 } else {
                     for elem in bucket_end {
-                        our_xor_set ^= *elem;
+                        our_xor_set ^= elem;
                     }
                 };
 
-                let mut payload: Vec<u8> = Vec::new();
+                let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size as usize);
                 payload.extend(self.encode_mode(Mode::Fingerprint));
                 payload.extend(our_xor_set.get_id_subsize(self.id_size));
 
@@ -668,30 +673,26 @@ impl Negentropy {
         XorElem::with_timestamp_and_id(timestamp, id)
     }
 
-    fn encode_mode(&self, mode: Mode) -> Box<dyn Iterator<Item = u8> + '_> {
+    fn encode_mode(&self, mode: Mode) -> Vec<u8> {
         self.encode_var_int(mode.as_u64())
     }
 
-    fn encode_var_int(&self, mut n: u64) -> Box<dyn Iterator<Item = u8> + '_> {
+    fn encode_var_int(&self, mut n: u64) -> Vec<u8> {
         if n == 0 {
-            return Box::new(iter::once(0));
+            return vec![0];
         }
 
-        let mut o: Vec<u8> = Vec::new();
+        let mut o: Vec<u8> = Vec::with_capacity(10);
 
         while n > 0 {
             o.push((n & 0x7F) as u8);
             n >>= 7;
         }
 
-        Box::new(o.into_iter().rev())
+        o
     }
 
-    fn encode_timestamp_out(
-        &self,
-        timestamp: u64,
-        last_timestamp_out: &mut u64,
-    ) -> Box<dyn Iterator<Item = u8> + '_> {
+    fn encode_timestamp_out(&self, timestamp: u64, last_timestamp_out: &mut u64) -> Vec<u8> {
         if timestamp == MAX_U64 {
             *last_timestamp_out = MAX_U64;
             return self.encode_var_int(0);
