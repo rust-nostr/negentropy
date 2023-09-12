@@ -41,7 +41,7 @@ where
         hex.push(char::from_digit((byte >> 4) as u32, 16).ok_or(Error::InvalidChar)?);
         hex.push(char::from_digit((byte & 0xF) as u32, 16).ok_or(Error::InvalidChar)?);
     }
-    Ok(hex.to_lowercase())
+    Ok(hex)
 }
 
 const fn val(c: u8, idx: usize) -> Result<u8, Error> {
