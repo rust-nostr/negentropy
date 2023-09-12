@@ -548,9 +548,9 @@ impl Negentropy {
         let mut curr_bound: XorElem = XorElem::new();
         let mut last_timestamp_out: u64 = 0;
 
-        self.pending_outputs.sort_by(|a, b| a.start.cmp(&b.start));
+        self.pending_outputs.sort_by(|a, b| b.start.cmp(&a.start));
 
-        while let Some(p) = self.pending_outputs.first() {
+        while let Some(p) = self.pending_outputs.last() {
             let mut o: Vec<u8> = Vec::new();
 
             if p.start < curr_bound {
@@ -575,7 +575,7 @@ impl Negentropy {
 
             output.extend(o);
             curr_bound = p.end;
-            self.pending_outputs.remove(0);
+            self.pending_outputs.pop();
         }
 
         if (!self.is_initiator && !self.pending_outputs.is_empty())
