@@ -27,6 +27,7 @@ use core::iter;
 use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+use std::collections::VecDeque;
 
 mod hex;
 
@@ -211,7 +212,7 @@ pub struct Negentropy {
     sealed: bool,
     is_initiator: bool,
     continuation_needed: bool,
-    pending_outputs: Vec<BoundOutput>,
+    pending_outputs: VecDeque<BoundOutput>,
 }
 
 impl Negentropy {
@@ -234,7 +235,7 @@ impl Negentropy {
             sealed: false,
             is_initiator: false,
             continuation_needed: false,
-            pending_outputs: Vec::new(),
+            pending_outputs: VecDeque::new(),
         })
     }
 
@@ -287,7 +288,7 @@ impl Negentropy {
 
         self.is_initiator = true;
 
-        let mut outputs: Vec<BoundOutput> = Vec::new();
+        let mut outputs: VecDeque<BoundOutput> = VecDeque::new();
 
         self.split_range(
             &self.items,
@@ -350,7 +351,7 @@ impl Negentropy {
         let mut prev_bound: XorElem = XorElem::new();
         let mut prev_index: usize = 0;
         let mut last_timestamp_in: u64 = 0;
-        let mut outputs: Vec<BoundOutput> = Vec::new();
+        let mut outputs: VecDeque<BoundOutput> = VecDeque::new();
         let mut query: &[u8] = query.as_ref();
 
         while !query.is_empty() {
@@ -457,7 +458,10 @@ impl Negentropy {
             prev_bound = curr_bound;
         }
 
-        self.pending_outputs.extend(outputs.into_iter().rev());
+        while outputs.len() > 0 {
+            self.pending_outputs.push_front(outputs.pop_back().unwrap());
+        }
+        //self.pending_outputs.extend(outputs.into_iter().rev());
 
         Ok(())
     }
@@ -465,7 +469,7 @@ impl Negentropy {
     #[allow(clippy::too_many_arguments)]
     fn flush_id_list_output(
         &self,
-        outputs: &mut Vec<BoundOutput>,
+        outputs: &mut VecDeque<BoundOutput>,
         upper: usize,
         prev_bound: XorElem,
         did_split: &mut bool,
@@ -489,7 +493,7 @@ impl Negentropy {
             self.get_minimal_bound(&self.items[*it], &self.items[*it + 1])?
         };
 
-        outputs.push(BoundOutput {
+        outputs.push_back(BoundOutput {
             start: if *did_split { *split_bound } else { prev_bound },
             end: next_split_bound,
             payload,
@@ -508,7 +512,7 @@ impl Negentropy {
         items: &[XorElem],
         lower_bound: XorElem,
         upper_bound: XorElem,
-        outputs: &mut Vec<BoundOutput>,
+        outputs: &mut VecDeque<BoundOutput>,
     ) -> Result<(), Error> {
         let num_elems: usize = items.len();
 
@@ -521,7 +525,7 @@ impl Negentropy {
                 payload.extend_from_slice(elem.get_id_subsize(self.id_size));
             }
 
-            outputs.push(BoundOutput {
+            outputs.push_back(BoundOutput {
                 start: lower_bound,
                 end: upper_bound,
                 payload,
@@ -557,7 +561,7 @@ impl Negentropy {
                     self.get_minimal_bound(&prev_bound, &lower)?
                 };
 
-                outputs.push(BoundOutput {
+                outputs.push_back(BoundOutput {
                     start: if i == 0 { lower_bound } else { prev_bound },
                     end: upper_bound,
                     payload,
@@ -566,7 +570,7 @@ impl Negentropy {
                 prev_bound = next_bound;
             }
 
-            if let Some(output) = outputs.last_mut() {
+            if let Some(output) = outputs.back_mut() {
                 output.end = upper_bound;
             }
         }
@@ -579,9 +583,9 @@ impl Negentropy {
         let mut curr_bound: XorElem = XorElem::new();
         let mut last_timestamp_out: u64 = 0;
 
-        self.pending_outputs.sort_by(|a, b| b.start.cmp(&a.start));
+        self.pending_outputs.make_contiguous().sort_by(|a, b| b.start.cmp(&a.start));
 
-        while let Some(p) = self.pending_outputs.last() {
+        while let Some(p) = self.pending_outputs.front() {
             let mut o: Vec<u8> = Vec::new();
 
             if p.start < curr_bound {
@@ -606,7 +610,7 @@ impl Negentropy {
 
             output.extend(o);
             curr_bound = p.end;
-            self.pending_outputs.pop();
+            self.pending_outputs.pop_front();
         }
 
         if (!self.is_initiator && !self.pending_outputs.is_empty())
