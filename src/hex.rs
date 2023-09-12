@@ -58,13 +58,21 @@ where
     T: AsRef<[u8]>,
 {
     let hex = hex.as_ref();
-    if hex.len() % 2 != 0 {
+    let len = hex.len();
+
+    if len % 2 != 0 {
         return Err(Error::OddLength);
     }
-    hex.chunks(2)
-        .enumerate()
-        .map(|(i, pair)| Ok(val(pair[0], 2 * i)? << 4 | val(pair[1], 2 * i + 1)?))
-        .collect()
+
+    let mut bytes: Vec<u8> = Vec::with_capacity(len / 2);
+
+    for i in (0..len).step_by(2) {
+        let high = val(hex[i], i)?;
+        let low = val(hex[i + 1], i + 1)?;
+        bytes.push(high << 4 | low);
+    }
+
+    Ok(bytes)
 }
 
 #[cfg(test)]
