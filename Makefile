@@ -3,6 +3,9 @@ precommit:
 	cargo clippy && cargo clippy --no-default-features
 	cargo test && cargo test --no-default-features
 
+graph:
+	cargo flamegraph --release --example bench -o bench-baseline.svg
+
 clean:
 	cargo clean
 
