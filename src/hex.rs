@@ -1,7 +1,6 @@
 // Copyright (c) 2022-2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
@@ -34,10 +33,11 @@ where
     T: AsRef<[u8]>,
 {
     let bytes: &[u8] = data.as_ref();
-    let mut hex: String = String::with_capacity(2 * bytes.len());
-    bytes
-        .iter()
-        .for_each(|b| hex.push_str(format!("{:02X}", b).as_str()));
+    let mut hex = String::with_capacity(2 * bytes.len());
+    for byte in bytes.iter() {
+        hex.push(char::from_digit((byte >> 4) as u32, 16).unwrap());
+        hex.push(char::from_digit((byte & 0xF) as u32, 16).unwrap());
+    }
     hex.to_lowercase()
 }
 

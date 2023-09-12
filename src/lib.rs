@@ -321,16 +321,9 @@ impl Negentropy {
         while !query.is_empty() {
             let curr_bound: XorElem = self.decode_bound(&mut query, &mut last_timestamp_in)?;
             let mode: u64 = self.decode_var_int(&mut query)?;
-            let items_len = self.items.len();
 
-            let lower = prev_index;
-            let mut upper = items_len;
-            for i in prev_index..items_len {
-                if self.items[i] >= curr_bound {
-                    upper = i;
-                    break;
-                }
-            }
+            let lower: usize = prev_index;
+            let upper: usize = binary_search_upper_bound(&self.items, curr_bound);
 
             match mode {
                 0 => {
@@ -701,6 +694,25 @@ impl Negentropy {
             XorElem::with_timestamp_and_id(curr.timestamp, &curr.id[..shared_prefix_bytes + 1])
         }
     }
+}
+
+fn binary_search_upper_bound<T>(items: &[T], curr_bound: T) -> usize
+where
+    T: Ord,
+{
+    let mut low = 0;
+    let mut high = items.len();
+
+    while low < high {
+        let mid = low + (high - low) / 2;
+        if items[mid] < curr_bound {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+
+    low
 }
 
 #[cfg(test)]
