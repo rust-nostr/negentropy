@@ -6,19 +6,33 @@ use negentropy::Negentropy;
 fn main() {
     // Client
     let mut client = Negentropy::new(16, None).unwrap();
-    client.add_item(0, "aaaaaaaaaaaaaaaa").unwrap();
-    client.add_item(1, "bbbbbbbbbbbbbbbb").unwrap();
+    client
+        .add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        .unwrap();
+    client
+        .add_item(1, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        .unwrap();
     client.seal().unwrap();
     let init_output = client.initiate().unwrap();
     println!("Initiator Output: {}", init_output);
 
     // Relay
     let mut relay = Negentropy::new(16, None).unwrap();
-    relay.add_item(0, "aaaaaaaaaaaaaaaa").unwrap();
-    relay.add_item(2, "cccccccccccccccc").unwrap();
-    relay.add_item(3, "1111111111111111").unwrap();
-    relay.add_item(5, "2222222222222222").unwrap();
-    relay.add_item(10, "3333333333333333").unwrap();
+    relay
+        .add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        .unwrap();
+    relay
+        .add_item(2, "cccccccccccccccccccccccccccccccc")
+        .unwrap();
+    relay
+        .add_item(3, "11111111111111111111111111111111")
+        .unwrap();
+    relay
+        .add_item(5, "22222222222222222222222222222222")
+        .unwrap();
+    relay
+        .add_item(10, "33333333333333333333333333333333")
+        .unwrap();
     relay.seal().unwrap();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
     println!("Reconcile Output: {}", reconcile_output);
