@@ -7,6 +7,7 @@ authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
 homepage = "https://github.com/yukibtc/rust-negentropy"
 repository = "https://github.com/yukibtc/rust-negentropy.git"
 license = "MIT"
+exclude = ["fuzz"]
 
 [features]
 default = ["std"]
