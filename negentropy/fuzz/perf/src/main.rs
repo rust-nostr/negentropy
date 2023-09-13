@@ -60,7 +60,7 @@ fn generate_combinations_recursive(
     current: &mut String,
     characters: &str,
     length: usize,
-    index: usize,
+    _index: usize,
     max: usize,
 ) {
     if length == 0 {
@@ -76,7 +76,7 @@ fn generate_combinations_recursive(
                 current,
                 characters,
                 length - 1,
-                index + 1,
+                _index + 1,
                 max,
             );
             current.pop();

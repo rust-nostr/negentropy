@@ -10,8 +10,8 @@ fn main() {
     let id_size = 16;
 
     let frame_size_limit_env_var = env::var("FRAMESIZELIMIT");
-    let frame_size_limit = if frame_size_limit_env_var.is_ok() {
-        frame_size_limit_env_var.unwrap().parse::<usize>().unwrap()
+    let frame_size_limit = if let Ok(frame_size_limit) = frame_size_limit_env_var {
+        frame_size_limit.parse::<usize>().unwrap()
     } else {
         0
     };
@@ -20,7 +20,7 @@ fn main() {
 
     for line in io::stdin().lock().lines() {
         let line_unwrapped = line.unwrap();
-        let items: Vec<&str> = line_unwrapped.split(",").collect();
+        let items: Vec<&str> = line_unwrapped.split(',').collect();
 
         if items[0] == "item" {
             let created = items[1].parse::<u64>().unwrap();
@@ -55,7 +55,7 @@ fn main() {
                     println!("need,{}", id);
                 }
 
-                if q.len() == 0 {
+                if q.is_empty() {
                     println!("done");
                     continue;
                 }

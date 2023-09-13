@@ -13,12 +13,4 @@ default = ["std"]
 std = []
 
 [[example]]
-name = "harness"
-required-features = ["std"]
-
-[[example]]
 name = "negentropy"
-
-[[example]]
-name = "perf"
-required-features = ["std"]
