@@ -1,6 +1,6 @@
 [package]
 name = "negentropy"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2018"
 description = "Rust implementation of the negentropy set-reconcilliation protocol."
 authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
