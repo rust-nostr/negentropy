@@ -17,3 +17,10 @@ lto = true
 codegen-units = 1
 panic = "abort"
 debug = true
+
+[[example]]
+name = "harness"
+required-features = ["std"]
+
+[[example]]
+name = "negentropy"

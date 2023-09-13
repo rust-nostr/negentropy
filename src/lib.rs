@@ -17,6 +17,7 @@ extern crate std;
 
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeSet;
+use alloc::collections::VecDeque;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -26,7 +27,6 @@ use core::fmt;
 use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-use std::collections::VecDeque;
 
 mod hex;
 
@@ -457,8 +457,8 @@ impl Negentropy {
             prev_bound = curr_bound;
         }
 
-        while outputs.len() > 0 {
-            self.pending_outputs.push_front(outputs.pop_back().unwrap());
+        while let Some(output) = outputs.pop_back() {
+            self.pending_outputs.push_front(output);
         }
 
         Ok(())
@@ -531,12 +531,13 @@ impl Negentropy {
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
-            let mut curr : usize = 0;
-            let mut prev_bound = items.iter().nth(0).unwrap();
+            let mut curr: usize = 0;
+            let mut prev_bound = items.first().copied().unwrap_or_default();
 
             for i in 0..BUCKETS {
                 let mut our_xor_set: XorElem = XorElem::new();
-                let bucket_end : usize = curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
+                let bucket_end: usize =
+                    curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
 
                 while curr != bucket_end {
                     our_xor_set ^= items[curr];
@@ -548,12 +549,19 @@ impl Negentropy {
                 payload.extend(our_xor_set.get_id_subsize(self.id_size));
 
                 outputs.push_back(BoundOutput {
-                    start: if i == 0 { lower_bound } else { *prev_bound },
-                    end: if bucket_end == items.len() { upper_bound } else { self.get_minimal_bound(&items[curr-1], &items[curr])? },
+                    start: if i == 0 { lower_bound } else { prev_bound },
+                    end: if bucket_end == items.len() {
+                        upper_bound
+                    } else {
+                        self.get_minimal_bound(&items[curr - 1], &items[curr])?
+                    },
                     payload,
                 });
 
-                prev_bound = &outputs.back().unwrap().end;
+                // TODO: use `.ok_or(Error::SomeError)?` instead
+                if let Some(back) = outputs.back() {
+                    prev_bound = back.end;
+                }
             }
 
             if let Some(output) = outputs.back_mut() {
@@ -569,7 +577,9 @@ impl Negentropy {
         let mut curr_bound: XorElem = XorElem::new();
         let mut last_timestamp_out: u64 = 0;
 
-        self.pending_outputs.make_contiguous().sort_by(|a, b| a.start.cmp(&b.start));
+        self.pending_outputs
+            .make_contiguous()
+            .sort_by(|a, b| a.start.cmp(&b.start));
 
         while let Some(p) = self.pending_outputs.front() {
             let mut o: Vec<u8> = Vec::new();
