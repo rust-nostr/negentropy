@@ -1,13 +1,13 @@
 precommit:
 	cargo fmt --all -- --config format_code_in_doc_comments=true
-	cargo clippy && cargo clippy --no-default-features
-	cargo test && cargo test --no-default-features
+	cargo clippy --all && cargo clippy --all --no-default-features
+	cargo test --all && cargo test --all --no-default-features
 
 bench:
-	RUSTFLAGS='--cfg=bench' cargo +nightly bench
+	RUSTFLAGS='--cfg=bench' cargo +nightly bench -p negentropy
 
 graph:
-	cargo flamegraph --release --example bench -o bench-baseline.svg
+	CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --release -p negentropy --example perf -o bench-baseline.svg
 
 clean:
 	cargo clean

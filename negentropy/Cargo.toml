@@ -1,0 +1,24 @@
+[package]
+name = "negentropy"
+version = "0.2.0"
+edition = "2018"
+description = "Rust implementation of the negentropy set-reconcilliation protocol."
+authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
+homepage = "https://github.com/yukibtc/rust-negentropy"
+repository = "https://github.com/yukibtc/rust-negentropy.git"
+license = "MIT"
+
+[features]
+default = ["std"]
+std = []
+
+[[example]]
+name = "harness"
+required-features = ["std"]
+
+[[example]]
+name = "negentropy"
+
+[[example]]
+name = "perf"
+required-features = ["std"]

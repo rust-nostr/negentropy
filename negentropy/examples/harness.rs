@@ -1,6 +1,7 @@
 // This is a testing harness for compatibility with the negentropy reference
 // implementation's test suite: https://github.com/hoytech/negentropy/tree/master/test
 
+use std::io::BufRead;
 use std::{env, io};
 
 use negentropy::Negentropy;
@@ -17,7 +18,7 @@ fn main() {
 
     let mut ne = Negentropy::new(id_size, Some(frame_size_limit as u64)).unwrap();
 
-    for line in io::stdin().lines() {
+    for line in io::stdin().lock().lines() {
         let line_unwrapped = line.unwrap();
         let items: Vec<&str> = line_unwrapped.split(",").collect();
 
