@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-//! Rust implementation of the negentropy set-reconcilliation protocol.
+//! Rust implementation of the negentropy set-reconciliation protocol.
 
 #![warn(missing_docs)]
 #![cfg_attr(bench, feature(test))]
@@ -269,7 +269,7 @@ impl Negentropy {
         Ok(())
     }
 
-    /// Initiate reconcilliation set
+    /// Initiate reconciliation set
     pub fn initiate(&mut self) -> Result<Bytes, Error> {
         if !self.sealed {
             return Err(Error::NotSealed);

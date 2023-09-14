@@ -2,7 +2,7 @@
 name = "negentropy"
 version = "0.2.1"
 edition = "2018"
-description = "Rust implementation of the negentropy set-reconcilliation protocol."
+description = "Rust implementation of the negentropy set-reconciliation protocol."
 authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
 homepage = "https://github.com/yukibtc/rust-negentropy"
 repository = "https://github.com/yukibtc/rust-negentropy.git"

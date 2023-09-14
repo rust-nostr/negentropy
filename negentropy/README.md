@@ -6,7 +6,7 @@
 
 ## Description
 
-Rust implementation of the [negentropy](https://github.com/hoytech/negentropy) set-reconcilliation protocol.
+Rust implementation of the [negentropy](https://github.com/hoytech/negentropy) set-reconciliation protocol.
 
 ## Minimum Supported Rust Version (MSRV)
 
