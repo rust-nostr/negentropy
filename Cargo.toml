@@ -4,7 +4,6 @@ members = [
     "negentropy/fuzz/harness",
     "negentropy/fuzz/perf",
 ]
-resolver = "2"
 
 [profile.release]
 lto = true
