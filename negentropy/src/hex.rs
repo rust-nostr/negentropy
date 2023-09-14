@@ -7,8 +7,6 @@ use core::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    /// Invalid char
-    InvalidChar,
     /// An invalid character was found
     InvalidHexCharacter { c: char, index: usize },
     /// A hex string's length needs to be even, as two digits correspond to
@@ -22,7 +20,6 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidChar => write!(f, "Invalid char"),
             Self::InvalidHexCharacter { c, index } => {
                 write!(f, "Invalid character {} at position {}", c, index)
             }
@@ -31,17 +28,26 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn encode<T>(data: T) -> Result<String, Error>
+#[inline]
+fn from_digit(num: u8) -> char {
+    if num < 10 {
+        (b'0' + num) as char
+    } else {
+        (b'a' + num - 10) as char
+    }
+}
+
+pub fn encode<T>(data: T) -> String
 where
     T: AsRef<[u8]>,
 {
     let bytes: &[u8] = data.as_ref();
-    let mut hex = String::with_capacity(2 * bytes.len());
+    let mut hex: String = String::with_capacity(2 * bytes.len());
     for byte in bytes.iter() {
-        hex.push(char::from_digit((byte >> 4) as u32, 16).ok_or(Error::InvalidChar)?);
-        hex.push(char::from_digit((byte & 0xF) as u32, 16).ok_or(Error::InvalidChar)?);
+        hex.push(from_digit(byte >> 4));
+        hex.push(from_digit(byte & 0xF));
     }
-    Ok(hex)
+    hex
 }
 
 const fn val(c: u8, idx: usize) -> Result<u8, Error> {
@@ -84,7 +90,7 @@ mod test {
 
     #[test]
     fn test_encode() {
-        assert_eq!(encode("foobar").unwrap(), "666f6f626172");
+        assert_eq!(encode("foobar"), "666f6f626172");
     }
 
     #[test]
@@ -107,5 +113,18 @@ mod test {
             decode("66ag").unwrap_err(),
             Error::InvalidHexCharacter { c: 'g', index: 3 }
         );
+    }
+}
+
+#[cfg(bench)]
+mod benches {
+    use super::*;
+    use crate::test::{black_box, Bencher};
+
+    #[bench]
+    pub fn hex_encode(bh: &mut Bencher) {
+        bh.iter(|| {
+            black_box(encode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        });
     }
 }
