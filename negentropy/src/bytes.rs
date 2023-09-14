@@ -1,6 +1,8 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ops::Deref;
 
 use crate::hex;

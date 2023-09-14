@@ -10,7 +10,7 @@ Rust implementation of the [negentropy](https://github.com/hoytech/negentropy) s
 
 ## Minimum Supported Rust Version (MSRV)
 
-These crates are built with the Rust language version `2018` and require a minimum compiler version of `1.52.1`
+These crates are built with the Rust language version `2018` and require a minimum compiler version of `1.48.0`
 
 ## License
 

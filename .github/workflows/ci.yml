@@ -18,18 +18,21 @@ jobs:
       - run: cargo fmt --all -- --config format_code_in_doc_comments=true --check
 
   build:
-    name: Build
+    name: Build negentropy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./negentropy
     strategy:
       matrix:
         rust:
-          - version: stable
-          - version: 1.52.1 #MSRV
+          - version: stable # STABLE
+          - version: 1.48.0 # MSRV
         build-args:
           [
-            "-p negentropy",
-            "-p negentropy --no-default-features",
-            "-p negentropy --target wasm32-unknown-unknown"
+            "",
+            "--no-default-features",
+            "--target wasm32-unknown-unknown"
           ]
     steps:
     - name: Checkout
@@ -45,15 +48,16 @@ jobs:
     - name: Set default toolchain
       run: rustup default ${{ matrix.rust.version }}
     - name: Add WASM
-      if: ${{ matrix.build-args == '-p negentropy --target wasm32-unknown-unknown' }}
+      if: ${{ matrix.build-args == '--target wasm32-unknown-unknown' }}
       run: rustup target add wasm32-unknown-unknown
     - name: Set profile
       run: rustup set profile minimal && rustup component add clippy
     - name: Build
       run: cargo build ${{ matrix.build-args }}
     - name: Tests
-      if: ${{ matrix.build-args != '-p negentropy --target wasm32-unknown-unknown' }}
+      if: ${{ matrix.build-args != '--target wasm32-unknown-unknown' }}
       run: cargo test ${{ matrix.build-args }}
     - name: Clippy
+      if: ${{ matrix.rust.version != '1.48.0' }}
       run: cargo clippy ${{ matrix.build-args }} -- -D warnings
   
