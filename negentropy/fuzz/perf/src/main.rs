@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use negentropy::Negentropy;
+use negentropy::{Bytes, Negentropy};
 
 const ID_SIZE: u8 = 10;
 const FRAME_SIZE_LIMIT: Option<u64> = None;
@@ -13,8 +13,12 @@ fn main() {
 
     // Client
     let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
-    client.add_item(0, "aaaaaaaaaaaaaaaaaaaa").unwrap();
-    client.add_item(1, "bbbbbbbbbbbbbbbbbbbb").unwrap();
+    client
+        .add_item(0, Bytes::from_hex("aaaaaaaaaaaaaaaaaaaa").unwrap())
+        .unwrap();
+    client
+        .add_item(1, Bytes::from_hex("bbbbbbbbbbbbbbbbbbbb").unwrap())
+        .unwrap();
     client.seal().unwrap();
     let now = Instant::now();
     let init_output = client.initiate().unwrap();
@@ -24,7 +28,9 @@ fn main() {
     let mut relay = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
     println!("Relay items: {}", items.len());
     for (index, item) in items.into_iter().enumerate() {
-        relay.add_item(index as u64, item).unwrap();
+        relay
+            .add_item(index as u64, Bytes::from_hex(item).unwrap())
+            .unwrap();
     }
     relay.seal().unwrap();
     let now = Instant::now();

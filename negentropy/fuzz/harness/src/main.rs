@@ -4,7 +4,7 @@
 use std::io::BufRead;
 use std::{env, io};
 
-use negentropy::Negentropy;
+use negentropy::{Bytes, Negentropy};
 
 fn main() {
     let id_size = 16;
@@ -25,7 +25,7 @@ fn main() {
         if items[0] == "item" {
             let created = items[1].parse::<u64>().unwrap();
             let id = items[2];
-            ne.add_item(created, id).unwrap();
+            ne.add_item(created, Bytes::from_hex(id).unwrap()).unwrap();
         } else if items[0] == "seal" {
             ne.seal().unwrap();
         } else if items[0] == "initiate" {
@@ -33,7 +33,7 @@ fn main() {
             if frame_size_limit > 0 && q.len() / 2 > frame_size_limit {
                 panic!("frameSizeLimit exceeded");
             }
-            println!("msg,{}", q);
+            println!("msg,{}", q.as_hex());
         } else if items[0] == "msg" {
             let mut q = String::new();
 
@@ -45,14 +45,15 @@ fn main() {
                 let mut have_ids = Vec::new();
                 let mut need_ids = Vec::new();
                 q = ne
-                    .reconcile_with_ids(&q, &mut have_ids, &mut need_ids)
-                    .unwrap();
+                    .reconcile_with_ids(&Bytes::from_hex(q).unwrap(), &mut have_ids, &mut need_ids)
+                    .unwrap()
+                    .to_hex();
 
-                for id in &have_ids {
-                    println!("have,{}", id);
+                for id in have_ids.into_iter() {
+                    println!("have,{}", id.to_hex());
                 }
-                for id in &need_ids {
-                    println!("need,{}", id);
+                for id in need_ids.into_iter() {
+                    println!("need,{}", id.to_hex());
                 }
 
                 if q.is_empty() {
@@ -60,7 +61,7 @@ fn main() {
                     continue;
                 }
             } else {
-                q = ne.reconcile(&q).unwrap();
+                q = ne.reconcile(&Bytes::from_hex(q).unwrap()).unwrap().to_hex();
             }
 
             if frame_size_limit > 0 && q.len() / 2 > frame_size_limit {

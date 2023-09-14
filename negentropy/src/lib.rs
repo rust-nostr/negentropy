@@ -18,7 +18,6 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeSet;
 use alloc::collections::VecDeque;
-use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
@@ -28,7 +27,10 @@ use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 
+mod bytes;
 mod hex;
+
+pub use self::bytes::Bytes;
 
 const MAX_U64: u64 = u64::MAX;
 const BUCKETS: usize = 16;
@@ -37,8 +39,6 @@ const DOUBLE_BUCKETS: usize = BUCKETS * 2;
 /// Error
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
-    /// Hex error
-    Hex(hex::Error),
     /// ID too big
     IdTooBig,
     /// Invalid ID size
@@ -68,7 +68,6 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Hex(e) => write!(f, "Hex: {}", e),
             Self::IdTooBig => write!(f, "ID too big"),
             Self::InvalidIdSize => write!(f, "Invalid ID size"),
             Self::IdSizeNotMatch => write!(f, "Current item ID not match the client ID size"),
@@ -82,12 +81,6 @@ impl fmt::Display for Error {
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
             Self::PrematureEndOfVarInt => write!(f, "premature end of varint"),
         }
-    }
-}
-
-impl From<hex::Error> for Error {
-    fn from(e: hex::Error) -> Self {
-        Self::Hex(e)
     }
 }
 
@@ -249,15 +242,12 @@ impl Negentropy {
     }
 
     /// Add item
-    pub fn add_item<T>(&mut self, created_at: u64, id: T) -> Result<(), Error>
-    where
-        T: AsRef<[u8]>,
-    {
+    pub fn add_item(&mut self, created_at: u64, id: Bytes) -> Result<(), Error> {
         if self.sealed {
             return Err(Error::AlreadySealed);
         }
 
-        let id: Vec<u8> = hex::decode(id)?;
+        let id: &[u8] = id.as_ref();
         if id.len() != self.id_size as usize {
             return Err(Error::IdSizeNotMatch);
         }
@@ -280,7 +270,7 @@ impl Negentropy {
     }
 
     /// Initiate reconcilliation set
-    pub fn initiate(&mut self) -> Result<String, Error> {
+    pub fn initiate(&mut self) -> Result<Bytes, Error> {
         if !self.sealed {
             return Err(Error::NotSealed);
         }
@@ -302,45 +292,34 @@ impl Negentropy {
     }
 
     /// Reconcilie
-    pub fn reconcile<T>(&mut self, query: T) -> Result<String, Error>
-    where
-        T: AsRef<[u8]>,
-    {
+    pub fn reconcile(&mut self, query: &Bytes) -> Result<Bytes, Error> {
         if self.is_initiator {
             return Err(Error::Initiator);
         }
-        let query: Vec<u8> = hex::decode(query)?;
         self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())?;
         self.build_output()
     }
 
     /// Reconcilie
-    pub fn reconcile_with_ids<T>(
+    pub fn reconcile_with_ids(
         &mut self,
-        query: T,
-        have_ids: &mut Vec<String>,
-        need_ids: &mut Vec<String>,
-    ) -> Result<String, Error>
-    where
-        T: AsRef<[u8]>,
-    {
+        query: &Bytes,
+        have_ids: &mut Vec<Bytes>,
+        need_ids: &mut Vec<Bytes>,
+    ) -> Result<Bytes, Error> {
         if !self.is_initiator {
             return Err(Error::NonInitiator);
         }
-        let query: Vec<u8> = hex::decode(query)?;
         self.reconcile_aux(query, have_ids, need_ids)?;
         self.build_output()
     }
 
-    fn reconcile_aux<T>(
+    fn reconcile_aux(
         &mut self,
-        query: T,
-        have_ids: &mut Vec<String>,
-        need_ids: &mut Vec<String>,
-    ) -> Result<(), Error>
-    where
-        T: AsRef<[u8]>,
-    {
+        query: &Bytes,
+        have_ids: &mut Vec<Bytes>,
+        need_ids: &mut Vec<Bytes>,
+    ) -> Result<(), Error> {
         if !self.sealed {
             return Err(Error::NotSealed);
         }
@@ -399,7 +378,7 @@ impl Negentropy {
                         let k = self.items[i].get_id();
                         if !their_elems.contains(k) {
                             if self.is_initiator {
-                                have_ids.push(hex::encode(k)?);
+                                have_ids.push(Bytes::from(k));
                             }
                         } else {
                             their_elems.remove(k);
@@ -408,7 +387,7 @@ impl Negentropy {
 
                     if self.is_initiator {
                         for k in their_elems.into_iter() {
-                            need_ids.push(hex::encode(k)?);
+                            need_ids.push(Bytes::from(k));
                         }
                     } else {
                         let mut response_have_ids: Vec<&[u8]> = Vec::with_capacity(100);
@@ -572,7 +551,7 @@ impl Negentropy {
         Ok(())
     }
 
-    fn build_output(&mut self) -> Result<String, Error> {
+    fn build_output(&mut self) -> Result<Bytes, Error> {
         let mut output: Vec<u8> = Vec::new();
         let mut curr_bound: XorElem = XorElem::new();
         let mut last_timestamp_out: u64 = 0;
@@ -618,7 +597,7 @@ impl Negentropy {
             output.extend(self.encode_mode(Mode::Continuation));
         }
 
-        Ok(hex::encode(output)?)
+        Ok(Bytes::from(output))
     }
 
     fn get_bytes(&self, encoded: &mut &[u8], n: u64) -> Result<Vec<u8>, Error> {
@@ -768,10 +747,16 @@ mod tests {
         // Client
         let mut client = Negentropy::new(16, None).unwrap();
         client
-            .add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .add_item(
+                0,
+                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            )
             .unwrap();
         client
-            .add_item(1, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .add_item(
+                1,
+                Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
+            )
             .unwrap();
         client.seal().unwrap();
         let init_output = client.initiate().unwrap();
@@ -779,19 +764,34 @@ mod tests {
         // Relay
         let mut relay = Negentropy::new(16, None).unwrap();
         relay
-            .add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .add_item(
+                0,
+                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            )
             .unwrap();
         relay
-            .add_item(2, "cccccccccccccccccccccccccccccccc")
+            .add_item(
+                2,
+                Bytes::from_hex("cccccccccccccccccccccccccccccccc").unwrap(),
+            )
             .unwrap();
         relay
-            .add_item(3, "11111111111111111111111111111111")
+            .add_item(
+                3,
+                Bytes::from_hex("11111111111111111111111111111111").unwrap(),
+            )
             .unwrap();
         relay
-            .add_item(5, "22222222222222222222222222222222")
+            .add_item(
+                5,
+                Bytes::from_hex("22222222222222222222222222222222").unwrap(),
+            )
             .unwrap();
         relay
-            .add_item(10, "33333333333333333333333333333333")
+            .add_item(
+                10,
+                Bytes::from_hex("33333333333333333333333333333333").unwrap(),
+            )
             .unwrap();
         relay.seal().unwrap();
         let reconcile_output = relay.reconcile(&init_output).unwrap();
@@ -807,7 +807,7 @@ mod tests {
         assert!(reconcile_output_with_ids.is_empty());
 
         // Check have IDs
-        assert!(have_ids.contains(&String::from("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")));
+        assert!(have_ids.contains(&Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap()));
 
         // Check need IDs
         #[cfg(feature = "std")]
@@ -815,10 +815,10 @@ mod tests {
         assert_eq!(
             need_ids,
             vec![
-                String::from("11111111111111111111111111111111"),
-                String::from("22222222222222222222222222222222"),
-                String::from("33333333333333333333333333333333"),
-                String::from("cccccccccccccccccccccccccccccccc"),
+                Bytes::from_hex("11111111111111111111111111111111").unwrap(),
+                Bytes::from_hex("22222222222222222222222222222222").unwrap(),
+                Bytes::from_hex("33333333333333333333333333333333").unwrap(),
+                Bytes::from_hex("cccccccccccccccccccccccccccccccc").unwrap(),
             ]
         )
     }
@@ -829,7 +829,9 @@ mod tests {
 
         let mut client = Negentropy::new(16, None).unwrap();
         assert_eq!(
-            client.add_item(0, "abcdef").unwrap_err(),
+            client
+                .add_item(0, Bytes::from_hex("abcdef").unwrap())
+                .unwrap_err(),
             Error::IdSizeNotMatch
         );
     }
@@ -839,7 +841,7 @@ mod tests {
 mod benches {
     use test::{black_box, Bencher};
 
-    use super::Negentropy;
+    use super::{Bytes, Negentropy};
 
     const ID_SIZE: u8 = 16;
     const FRAME_SIZE_LIMIT: Option<u64> = None;
@@ -849,7 +851,11 @@ mod benches {
     pub fn add_item(bh: &mut Bencher) {
         let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
         bh.iter(|| {
-            black_box(client.add_item(0, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).unwrap();
+            black_box(client.add_item(
+                0,
+                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            ))
+            .unwrap();
         });
     }
 
@@ -860,7 +866,9 @@ mod benches {
             .into_iter()
             .enumerate()
         {
-            client.add_item(index as u64, item).unwrap();
+            client
+                .add_item(index as u64, Bytes::from_hex(item).unwrap())
+                .unwrap();
         }
         client.seal().unwrap();
         bh.iter(|| {
@@ -873,7 +881,9 @@ mod benches {
         // Client
         let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
         for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
-            client.add_item(index as u64, item).unwrap();
+            client
+                .add_item(index as u64, Bytes::from_hex(item).unwrap())
+                .unwrap();
         }
         client.seal().unwrap();
         let init_output = client.initiate().unwrap();
@@ -883,7 +893,9 @@ mod benches {
             .into_iter()
             .enumerate()
         {
-            relay.add_item(index as u64, item).unwrap();
+            relay
+                .add_item(index as u64, Bytes::from_hex(item).unwrap())
+                .unwrap();
         }
         relay.seal().unwrap();
 
@@ -897,7 +909,9 @@ mod benches {
         // Client
         let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
         for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
-            client.add_item(index as u64, item).unwrap();
+            client
+                .add_item(index as u64, Bytes::from_hex(item).unwrap())
+                .unwrap();
         }
         client.seal().unwrap();
         let init_output = client.initiate().unwrap();
@@ -907,7 +921,9 @@ mod benches {
             .into_iter()
             .enumerate()
         {
-            relay.add_item(index as u64, item).unwrap();
+            relay
+                .add_item(index as u64, Bytes::from_hex(item).unwrap())
+                .unwrap();
         }
         relay.seal().unwrap();
         let reconcile_output = relay.reconcile(&init_output).unwrap();
