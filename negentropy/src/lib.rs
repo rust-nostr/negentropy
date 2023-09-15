@@ -249,11 +249,11 @@ impl Negentropy {
         }
 
         let id: &[u8] = id.as_ref();
-        if id.len() != self.id_size as usize { // FIXME: allow greater
+        if id.len() < self.id_size as usize {
             return Err(Error::IdSizeNotMatch);
         }
 
-        let elem: Item = Item::with_timestamp_and_id(created_at, id)?;
+        let elem: Item = Item::with_timestamp_and_id(created_at, &id[0..(self.id_size as usize)])?;
 
         self.added_items.push(elem);
         Ok(())
