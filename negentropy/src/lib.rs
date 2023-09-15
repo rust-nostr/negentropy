@@ -26,6 +26,7 @@ use core::fmt;
 use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+use sha2::{Sha256, Digest};
 
 mod bytes;
 mod hex;
@@ -127,10 +128,6 @@ impl Item {
 
     fn get_id(&self) -> &[u8] {
         self.id.get(..self.id_size as usize).unwrap_or_default()
-    }
-
-    fn get_id_subsize(&self, sub_size: u64) -> &[u8] {
-        self.id.get(..sub_size as usize).unwrap_or_default()
     }
 }
 
@@ -275,6 +272,13 @@ impl Negentropy {
         Item::with_timestamp_and_id(self.item_timestamps[i], self.get_item_id(i)).unwrap()
     }
 
+    fn compute_fingerprint(&self, lower: usize, num: usize) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        let offset = lower * (self.id_size as usize);
+        hasher.update(&self.item_ids[offset..(offset + (num * (self.id_size as usize)))]);
+        hasher.finalize().as_slice()[0..(self.id_size as usize)].to_vec()
+    }
+
     /// Seal
     pub fn seal(&mut self) -> Result<(), Error> {
         if self.sealed {
@@ -374,17 +378,10 @@ impl Negentropy {
             match mode {
                 Mode::Skip => (),
                 Mode::Fingerprint => {
-                    let their_xor_set: Item = Item::with_timestamp_and_id(
-                        0,
-                        self.get_bytes(&mut query, self.id_size)?,
-                    )?;
+                    let their_fingerprint = self.get_bytes(&mut query, self.id_size)?;
+                    let our_fingerprint = self.compute_fingerprint(lower, upper - lower);
 
-                    let mut our_xor_set: Item = Item::new();
-                    for i in lower..upper {
-                        our_xor_set ^= self.get_item(i);
-                    }
-
-                    if their_xor_set.get_id() != our_xor_set.get_id_subsize(self.id_size) {
+                    if their_fingerprint != our_fingerprint {
                         self.split_range(
                             lower,
                             upper,
@@ -548,22 +545,17 @@ impl Negentropy {
             let mut prev_bound = self.get_item(lower);
 
             for i in 0..BUCKETS {
-                let mut our_xor_set: Item = Item::new();
-                let bucket_end: usize =
-                    curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
-
-                while curr != bucket_end {
-                    our_xor_set ^= self.get_item(curr);
-                    curr += 1;
-                }
+                let bucket_size: usize = items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
+                let our_fingerprint = self.compute_fingerprint(curr, bucket_size);
+                curr += bucket_size;
 
                 let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size as usize);
                 payload.extend(self.encode_mode(Mode::Fingerprint));
-                payload.extend(our_xor_set.get_id_subsize(self.id_size));
+                payload.extend(our_fingerprint);
 
                 outputs.push_back(OutputRange {
                     start: if i == 0 { lower_bound } else { prev_bound },
-                    end: if bucket_end == upper {
+                    end: if curr == upper {
                         upper_bound
                     } else {
                         self.get_minimal_bound(&self.get_item(curr - 1), &self.get_item(curr))?
