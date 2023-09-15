@@ -248,7 +248,7 @@ impl Negentropy {
         }
 
         let id: &[u8] = id.as_ref();
-        if id.len() != self.id_size as usize {
+        if id.len() != self.id_size as usize { // FIXME: allow greater
             return Err(Error::IdSizeNotMatch);
         }
 
@@ -280,7 +280,8 @@ impl Negentropy {
         let mut outputs: VecDeque<OutputRange> = VecDeque::new();
 
         self.split_range(
-            &self.items,
+            0,
+            self.items.len(),
             Item::new(),
             Item::with_timestamp(MAX_U64),
             &mut outputs,
@@ -354,7 +355,8 @@ impl Negentropy {
 
                     if their_xor_set.get_id() != our_xor_set.get_id_subsize(self.id_size) {
                         self.split_range(
-                            &self.items[lower..upper],
+                            lower,
+                            upper,
                             prev_bound,
                             curr_bound,
                             &mut outputs,
@@ -486,20 +488,21 @@ impl Negentropy {
 
     fn split_range(
         &self,
-        items: &[Item],
+        lower: usize,
+        upper: usize,
         lower_bound: Item,
         upper_bound: Item,
         outputs: &mut VecDeque<OutputRange>,
     ) -> Result<(), Error> {
-        let num_elems: usize = items.len();
+        let num_elems: usize = upper - lower;
 
         if num_elems < DOUBLE_BUCKETS {
             let mut payload: Vec<u8> = Vec::with_capacity(10 + 10 + num_elems);
             payload.extend(self.encode_mode(Mode::IdList));
             payload.extend(self.encode_var_int(num_elems as u64));
 
-            for elem in items.iter() {
-                payload.extend_from_slice(elem.get_id_subsize(self.id_size));
+            for i in 0..num_elems {
+                payload.extend_from_slice(self.items[lower + i].get_id_subsize(self.id_size));
             }
 
             outputs.push_back(OutputRange {
@@ -510,8 +513,8 @@ impl Negentropy {
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
-            let mut curr: usize = 0;
-            let mut prev_bound = items.first().copied().unwrap_or_default();
+            let mut curr: usize = lower;
+            let mut prev_bound = self.items[lower];
 
             for i in 0..BUCKETS {
                 let mut our_xor_set: Item = Item::new();
@@ -519,7 +522,7 @@ impl Negentropy {
                     curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
 
                 while curr != bucket_end {
-                    our_xor_set ^= items[curr];
+                    our_xor_set ^= self.items[curr];
                     curr += 1;
                 }
 
@@ -529,10 +532,10 @@ impl Negentropy {
 
                 outputs.push_back(OutputRange {
                     start: if i == 0 { lower_bound } else { prev_bound },
-                    end: if bucket_end == items.len() {
+                    end: if bucket_end == upper {
                         upper_bound
                     } else {
-                        self.get_minimal_bound(&items[curr - 1], &items[curr])?
+                        self.get_minimal_bound(&self.items[curr - 1], &self.items[curr])?
                     },
                     payload,
                 });
