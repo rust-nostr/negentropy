@@ -91,7 +91,7 @@ impl fmt::Display for Error {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Item {
     timestamp: u64,
-    id_size: u8,
+    id_size: usize,
     id: [u8; 32],
 }
 
@@ -119,18 +119,18 @@ impl Item {
 
         let mut item = Self::new();
         item.timestamp = timestamp;
-        item.id_size = len as u8;
+        item.id_size = len;
         item.id[..len].copy_from_slice(id);
 
         Ok(item)
     }
 
-    fn id_size(&self) -> u8 {
+    fn id_size(&self) -> usize {
         self.id_size
     }
 
     fn get_id(&self) -> &[u8] {
-        self.id.get(..self.id_size as usize).unwrap_or_default()
+        self.id.get(..self.id_size).unwrap_or_default()
     }
 }
 
@@ -198,7 +198,7 @@ impl TryFrom<u64> for Mode {
 /// Negentropy
 #[derive(Debug, Clone)]
 pub struct Negentropy {
-    id_size: u64,
+    id_size: usize,
     frame_size_limit: Option<u64>,
     added_items: Vec<Item>,
     item_timestamps: Vec<u64>,
@@ -211,7 +211,7 @@ pub struct Negentropy {
 
 impl Negentropy {
     /// Create new [`Negentropy`] instance
-    pub fn new(id_size: u8, frame_size_limit: Option<u64>) -> Result<Self, Error> {
+    pub fn new(id_size: usize, frame_size_limit: Option<u64>) -> Result<Self, Error> {
         if !(8..=32).contains(&id_size) {
             return Err(Error::InvalidIdSize);
         }
@@ -223,7 +223,7 @@ impl Negentropy {
         }
 
         Ok(Self {
-            id_size: id_size as u64,
+            id_size: id_size,
             frame_size_limit,
             added_items: Vec::new(),
             item_timestamps: Vec::new(),
@@ -252,11 +252,11 @@ impl Negentropy {
         }
 
         let id: &[u8] = id.as_ref();
-        if id.len() < self.id_size as usize {
+        if id.len() < self.id_size {
             return Err(Error::IdSizeNotMatch);
         }
 
-        let elem: Item = Item::with_timestamp_and_id(created_at, &id[0..(self.id_size as usize)])?;
+        let elem: Item = Item::with_timestamp_and_id(created_at, &id[0..self.id_size])?;
 
         self.added_items.push(elem);
         Ok(())
@@ -267,8 +267,8 @@ impl Negentropy {
     }
 
     fn get_item_id(&self, i: usize) -> &[u8] {
-        let offset = i * (self.id_size as usize);
-        &self.item_ids[offset..(offset + (self.id_size as usize))]
+        let offset = i * self.id_size;
+        &self.item_ids[offset..(offset + self.id_size)]
     }
 
     fn get_item(&self, i: usize) -> Item {
@@ -277,9 +277,9 @@ impl Negentropy {
 
     fn compute_fingerprint(&self, lower: usize, num: usize) -> Vec<u8> {
         let mut hasher = Sha256::new();
-        let offset = lower * (self.id_size as usize);
-        hasher.update(&self.item_ids[offset..(offset + (num * (self.id_size as usize)))]);
-        hasher.finalize().as_slice()[0..(self.id_size as usize)].to_vec()
+        let offset = lower * self.id_size;
+        hasher.update(&self.item_ids[offset..(offset + (num * self.id_size))]);
+        hasher.finalize().as_slice()[0..self.id_size].to_vec()
     }
 
     /// Seal
@@ -558,7 +558,7 @@ impl Negentropy {
                 let our_fingerprint = self.compute_fingerprint(curr, bucket_size);
                 curr += bucket_size;
 
-                let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size as usize);
+                let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size);
                 payload.extend(self.encode_mode(Mode::Fingerprint));
                 payload.extend(our_fingerprint);
 
@@ -644,7 +644,7 @@ impl Negentropy {
             it += step;
 
             let cond: bool = if value.timestamp == self.item_timestamps[it] {
-                &value.id[0..(self.id_size as usize)] < self.get_item_id(it)
+                &value.id[0..self.id_size] < self.get_item_id(it)
             } else {
                 value.timestamp < self.item_timestamps[it]
             };
@@ -661,8 +661,7 @@ impl Negentropy {
         first
     }
 
-    fn get_bytes(&self, encoded: &mut &[u8], n: u64) -> Result<Vec<u8>, Error> {
-        let n = n as usize;
+    fn get_bytes(&self, encoded: &mut &[u8], n: usize) -> Result<Vec<u8>, Error> {
         if encoded.len() < n {
             return Err(Error::ParseEndsPrematurely);
         }
@@ -713,7 +712,7 @@ impl Negentropy {
     ) -> Result<Item, Error> {
         let timestamp = self.decode_timestamp_in(encoded, last_timestamp_in)?;
         let len = self.decode_var_int(encoded)?;
-        let id = self.get_bytes(encoded, len)?;
+        let id = self.get_bytes(encoded, len as usize)?;
         Item::with_timestamp_and_id(timestamp, id)
     }
 
