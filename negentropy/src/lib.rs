@@ -200,7 +200,9 @@ impl TryFrom<u64> for Mode {
 pub struct Negentropy {
     id_size: u64,
     frame_size_limit: Option<u64>,
-    items: Vec<Item>,
+    added_items: Vec<Item>,
+    item_timestamps: Vec<u64>,
+    item_ids: Vec<u8>,
     sealed: bool,
     is_initiator: bool,
     continuation_needed: bool,
@@ -223,7 +225,9 @@ impl Negentropy {
         Ok(Self {
             id_size: id_size as u64,
             frame_size_limit,
-            items: Vec::new(),
+            added_items: Vec::new(),
+            item_timestamps: Vec::new(),
+            item_ids: Vec::new(),
             sealed: false,
             is_initiator: false,
             continuation_needed: false,
@@ -254,8 +258,21 @@ impl Negentropy {
 
         let elem: Item = Item::with_timestamp_and_id(created_at, id)?;
 
-        self.items.push(elem);
+        self.added_items.push(elem);
         Ok(())
+    }
+
+    fn num_items(&self) -> usize {
+        self.item_timestamps.len()
+    }
+
+    fn get_item_id(&self, i: usize) -> &[u8] {
+        let offset = i * (self.id_size as usize);
+        &self.item_ids[offset..(offset + (self.id_size as usize))]
+    }
+
+    fn get_item(&self, i: usize) -> Item {
+        Item::with_timestamp_and_id(self.item_timestamps[i], self.get_item_id(i)).unwrap()
     }
 
     /// Seal
@@ -263,9 +280,23 @@ impl Negentropy {
         if self.sealed {
             return Err(Error::AlreadySealed);
         }
-
-        self.items.sort();
         self.sealed = true;
+
+        self.added_items.sort();
+
+        // FIXME: dup detection
+
+        self.item_timestamps.reserve_exact(self.added_items.len());
+        self.item_ids.reserve_exact(self.added_items.len());
+
+        for item in self.added_items.iter() {
+            self.item_timestamps.push(item.timestamp);
+            self.item_ids.extend(item.get_id());
+        }
+
+        self.added_items.clear();
+        self.added_items.shrink_to_fit();
+
         Ok(())
     }
 
@@ -281,7 +312,7 @@ impl Negentropy {
 
         self.split_range(
             0,
-            self.items.len(),
+            self.num_items(),
             Item::new(),
             Item::with_timestamp(MAX_U64),
             &mut outputs,
@@ -338,7 +369,7 @@ impl Negentropy {
             let mode: Mode = self.decode_mode(&mut query)?;
 
             let lower: usize = prev_index;
-            let upper: usize = binary_search_upper_bound(&self.items, curr_bound);
+            let upper: usize = self.find_upper_bound(prev_index, self.num_items(), &curr_bound);
 
             match mode {
                 Mode::Skip => (),
@@ -350,7 +381,7 @@ impl Negentropy {
 
                     let mut our_xor_set: Item = Item::new();
                     for i in lower..upper {
-                        our_xor_set ^= self.items[i];
+                        our_xor_set ^= self.get_item(i);
                     }
 
                     if their_xor_set.get_id() != our_xor_set.get_id_subsize(self.id_size) {
@@ -377,7 +408,7 @@ impl Negentropy {
                     }
 
                     for i in lower..upper {
-                        let k = self.items[i].get_id();
+                        let k = self.get_item_id(i);
                         if !their_elems.contains(k) {
                             if self.is_initiator {
                                 have_ids.push(Bytes::from(k));
@@ -398,7 +429,7 @@ impl Negentropy {
                         let mut split_bound: Item = Item::new();
 
                         while it < upper {
-                            let k: &[u8] = self.items[it].get_id();
+                            let k: &[u8] = self.get_item_id(it);
                             response_have_ids.push(k);
                             if response_have_ids.len() >= 100 {
                                 self.flush_id_list_output(
@@ -469,7 +500,7 @@ impl Negentropy {
         let next_split_bound: Item = if *it + 1 >= upper {
             *curr_bound
         } else {
-            self.get_minimal_bound(&self.items[*it], &self.items[*it + 1])?
+            self.get_minimal_bound(&self.get_item(*it), &self.get_item(*it + 1))?
         };
 
         outputs.push_back(OutputRange {
@@ -502,7 +533,7 @@ impl Negentropy {
             payload.extend(self.encode_var_int(num_elems as u64));
 
             for i in 0..num_elems {
-                payload.extend_from_slice(self.items[lower + i].get_id_subsize(self.id_size));
+                payload.extend_from_slice(self.get_item_id(lower + i));
             }
 
             outputs.push_back(OutputRange {
@@ -514,7 +545,7 @@ impl Negentropy {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
             let mut curr: usize = lower;
-            let mut prev_bound = self.items[lower];
+            let mut prev_bound = self.get_item(lower);
 
             for i in 0..BUCKETS {
                 let mut our_xor_set: Item = Item::new();
@@ -522,7 +553,7 @@ impl Negentropy {
                     curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
 
                 while curr != bucket_end {
-                    our_xor_set ^= self.items[curr];
+                    our_xor_set ^= self.get_item(curr);
                     curr += 1;
                 }
 
@@ -535,7 +566,7 @@ impl Negentropy {
                     end: if bucket_end == upper {
                         upper_bound
                     } else {
-                        self.get_minimal_bound(&self.items[curr - 1], &self.items[curr])?
+                        self.get_minimal_bound(&self.get_item(curr - 1), &self.get_item(curr))?
                     },
                     payload,
                 });
@@ -601,6 +632,32 @@ impl Negentropy {
         }
 
         Ok(Bytes::from(output))
+    }
+
+    fn find_upper_bound(&self, mut first: usize, last: usize, value: &Item) -> usize {
+        let mut count: usize = last - first;
+
+        while count > 0 {
+            let mut it: usize = first;
+            let step: usize = count / 2;
+            it += step;
+
+            let cond: bool = if value.timestamp == self.item_timestamps[it] {
+                &value.id[0..(self.id_size as usize)] < self.get_item_id(it)
+            } else {
+                value.timestamp < self.item_timestamps[it]
+            };
+
+            if cond {
+                count = step;
+            } else {
+                it = it + 1;
+                first = it;
+                count -= step + 1;
+            }
+        }
+
+        first
     }
 
     fn get_bytes(&self, encoded: &mut &[u8], n: u64) -> Result<Vec<u8>, Error> {
@@ -718,25 +775,6 @@ impl Negentropy {
             Item::with_timestamp_and_id(curr.timestamp, &curr.id[..shared_prefix_bytes + 1])
         }
     }
-}
-
-fn binary_search_upper_bound<T>(items: &[T], curr_bound: T) -> usize
-where
-    T: Ord,
-{
-    let mut low = 0;
-    let mut high = items.len();
-
-    while low < high {
-        let mid = low + (high - low) / 2;
-        if items[mid] < curr_bound {
-            low = mid + 1;
-        } else {
-            high = mid;
-        }
-    }
-
-    low
 }
 
 #[cfg(test)]
