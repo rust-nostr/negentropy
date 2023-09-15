@@ -64,6 +64,8 @@ pub enum Error {
     ParseEndsPrematurely,
     /// Prepature end of var int
     PrematureEndOfVarInt,
+    /// Duplicate item added
+    DuplicateItemAdded,
 }
 
 impl fmt::Display for Error {
@@ -81,6 +83,7 @@ impl fmt::Display for Error {
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
             Self::PrematureEndOfVarInt => write!(f, "premature end of varint"),
+            Self::DuplicateItemAdded => write!(f, "duplicate item added"),
         }
     }
 }
@@ -288,7 +291,13 @@ impl Negentropy {
 
         self.added_items.sort();
 
-        // FIXME: dup detection
+        if self.added_items.len() > 1 {
+            for i in 0..(self.added_items.len() - 1) {
+                if self.added_items[i] == self.added_items[i + 1] {
+                    return Err(Error::DuplicateItemAdded);
+                }
+            }
+        }
 
         self.item_timestamps.reserve_exact(self.added_items.len());
         self.item_ids.reserve_exact(self.added_items.len());
