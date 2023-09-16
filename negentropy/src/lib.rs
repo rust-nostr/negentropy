@@ -33,6 +33,7 @@ mod hex;
 
 pub use self::bytes::Bytes;
 
+const PROTOCOL_VERSION_0: u64 = 0x60;
 const MAX_U64: u64 = u64::MAX;
 const BUCKETS: usize = 16;
 const DOUBLE_BUCKETS: usize = BUCKETS * 2;
@@ -52,20 +53,24 @@ pub enum Error {
     NotSealed,
     /// Already sealed
     AlreadySealed,
+    /// Already built initial message
+    AlreadyBuiltInitialMessage,
     /// Initiator error
     Initiator,
     /// Non-initiator error
     NonInitiator,
-    /// Deprecated protocol
-    DeprecatedProtocol,
+    /// Initiate after reconcile
+    InitiateAfterReconcile,
     /// Unexpected mode
     UnexpectedMode(u64),
     /// Parse ends prematurely
     ParseEndsPrematurely,
-    /// Prepature end of var int
-    PrematureEndOfVarInt,
     /// Duplicate item added
     DuplicateItemAdded,
+    /// Invalid protocol version
+    InvalidProtocolVersion,
+    /// Unsupported protocol version
+    UnsupportedProtocolVersion,
 }
 
 impl fmt::Display for Error {
@@ -77,13 +82,15 @@ impl fmt::Display for Error {
             Self::FrameSizeLimitTooSmall => write!(f, "Frame size limit too small"),
             Self::NotSealed => write!(f, "Not sealed"),
             Self::AlreadySealed => write!(f, "Already sealed"),
+            Self::AlreadyBuiltInitialMessage => write!(f, "Already built initial message"),
             Self::Initiator => write!(f, "initiator not asking for have/need IDs"),
             Self::NonInitiator => write!(f, "non-initiator asking for have/need IDs"),
-            Self::DeprecatedProtocol => write!(f, "Other side is speaking old negentropy protocol"),
+            Self::InitiateAfterReconcile => write!(f, "can't initiate after reconcile"),
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
-            Self::PrematureEndOfVarInt => write!(f, "premature end of varint"),
             Self::DuplicateItemAdded => write!(f, "duplicate item added"),
+            Self::InvalidProtocolVersion => write!(f, "invalid negentropy protocol version byte"),
+            Self::UnsupportedProtocolVersion => write!(f, "server does not support our negentropy protocol version"),
         }
     }
 }
@@ -171,8 +178,8 @@ enum Mode {
     Skip = 0,
     Fingerprint = 1,
     IdList = 2,
-    Deprecated = 3,
-    Continuation = 4,
+    Continuation = 3,
+    UnsupportedProtocolVersion = 4,
 }
 
 impl Mode {
@@ -188,8 +195,7 @@ impl TryFrom<u64> for Mode {
             0 => Ok(Mode::Skip),
             1 => Ok(Mode::Fingerprint),
             2 => Ok(Mode::IdList),
-            3 => Ok(Mode::Deprecated),
-            4 => Ok(Mode::Continuation),
+            3 => Ok(Mode::Continuation),
             m => Err(Error::UnexpectedMode(m)),
         }
     }
@@ -205,6 +211,7 @@ pub struct Negentropy {
     item_ids: Vec<u8>,
     sealed: bool,
     is_initiator: bool,
+    did_handshake: bool,
     continuation_needed: bool,
     pending_outputs: VecDeque<OutputRange>,
 }
@@ -230,6 +237,7 @@ impl Negentropy {
             item_ids: Vec::new(),
             sealed: false,
             is_initiator: false,
+            did_handshake: false,
             continuation_needed: false,
             pending_outputs: VecDeque::new(),
         })
@@ -319,6 +327,10 @@ impl Negentropy {
             return Err(Error::NotSealed);
         }
 
+        if self.did_handshake {
+            return Err(Error::InitiateAfterReconcile);
+        }
+
         self.is_initiator = true;
 
         let mut outputs: VecDeque<OutputRange> = VecDeque::new();
@@ -333,35 +345,61 @@ impl Negentropy {
 
         self.pending_outputs = outputs;
 
-        self.build_output()
+        Ok(self.build_output(true).unwrap().unwrap())
     }
 
-    /// Reconcilie
+    /// Reconcile (server method)
     pub fn reconcile(&mut self, query: &Bytes) -> Result<Bytes, Error> {
+        let mut query: &[u8] = query.as_ref();
+
         if self.is_initiator {
             return Err(Error::Initiator);
         }
-        self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())?;
-        self.build_output()
+
+        if !self.did_handshake {
+            let protocol_version = self.get_bytes(&mut query, 1)?[0] as u64;
+
+            if protocol_version < 0x60 || protocol_version > 0x6F {
+                return Err(Error::InvalidProtocolVersion);
+            }
+
+            if protocol_version != PROTOCOL_VERSION_0 {
+                let mut o: Vec<u8> = Vec::new();
+                let mut last_timestamp_out: u64 = 0;
+                o.extend(self.encode_bound(&Item::with_timestamp(PROTOCOL_VERSION_0), &mut last_timestamp_out));
+                o.extend(self.encode_mode(Mode::UnsupportedProtocolVersion));
+                return Ok(Bytes::from(o));
+            }
+
+            self.did_handshake = true;
+        }
+
+        self.reconcile_aux(&mut query, &mut Vec::new(), &mut Vec::new())?;
+
+        Ok(self.build_output(false).unwrap().unwrap())
     }
 
-    /// Reconcilie
+    /// Reconcile (client method)
     pub fn reconcile_with_ids(
         &mut self,
         query: &Bytes,
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Option<Bytes>, Error> {
+        let mut query: &[u8] = query.as_ref();
+
         if !self.is_initiator {
             return Err(Error::NonInitiator);
         }
-        self.reconcile_aux(query, have_ids, need_ids)?;
-        self.build_output()
+
+        self.reconcile_aux(&mut query, have_ids, need_ids)?;
+
+        self.build_output(false)
     }
 
     fn reconcile_aux(
         &mut self,
-        query: &Bytes,
+        mut query: &[u8],
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
     ) -> Result<(), Error> {
@@ -375,7 +413,6 @@ impl Negentropy {
         let mut prev_index: usize = 0;
         let mut last_timestamp_in: u64 = 0;
         let mut outputs: VecDeque<OutputRange> = VecDeque::new();
-        let mut query: &[u8] = query.as_ref();
 
         while !query.is_empty() {
             let curr_bound: Item = self.decode_bound(&mut query, &mut last_timestamp_in)?;
@@ -463,11 +500,11 @@ impl Negentropy {
                         )?;
                     }
                 }
-                Mode::Deprecated => {
-                    return Err(Error::DeprecatedProtocol);
-                }
                 Mode::Continuation => {
                     self.continuation_needed = true;
+                }
+                Mode::UnsupportedProtocolVersion => {
+                    return Err(Error::UnsupportedProtocolVersion);
                 }
             }
 
@@ -586,10 +623,18 @@ impl Negentropy {
         Ok(())
     }
 
-    fn build_output(&mut self) -> Result<Bytes, Error> {
+    fn build_output(&mut self, initial_message: bool) -> Result<Option<Bytes>, Error> {
         let mut output: Vec<u8> = Vec::new();
         let mut curr_bound: Item = Item::new();
         let mut last_timestamp_out: u64 = 0;
+
+        if initial_message {
+            if self.did_handshake {
+                return Err(Error::AlreadyBuiltInitialMessage);
+            }
+            self.did_handshake = true;
+            output.push(PROTOCOL_VERSION_0 as u8);
+        }
 
         self.pending_outputs
             .make_contiguous()
@@ -623,16 +668,18 @@ impl Negentropy {
             self.pending_outputs.pop_front();
         }
 
-        if (!self.is_initiator && !self.pending_outputs.is_empty())
-            || (self.is_initiator && output.is_empty() && self.continuation_needed)
-        {
+        if !self.is_initiator && !self.pending_outputs.is_empty() {
             output.extend(
                 &self.encode_bound(&Item::with_timestamp(MAX_U64), &mut last_timestamp_out),
             );
             output.extend(self.encode_mode(Mode::Continuation));
         }
 
-        Ok(Bytes::from(output))
+        if self.is_initiator && output.is_empty() && !self.continuation_needed {
+            return Ok(None);
+        }
+
+        Ok(Some(Bytes::from(output)))
     }
 
     fn find_upper_bound(&self, mut first: usize, last: usize, value: &Item) -> usize {
@@ -845,7 +892,7 @@ mod tests {
             .unwrap();
 
         // Check reconcile with IDs output
-        assert!(reconcile_output_with_ids.is_empty());
+        assert!(reconcile_output_with_ids.is_none());
 
         // Check have IDs
         assert!(have_ids.contains(&Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap()));

@@ -44,10 +44,9 @@ fn main() {
             if ne.is_initiator() {
                 let mut have_ids = Vec::new();
                 let mut need_ids = Vec::new();
-                q = ne
+                let resp = ne
                     .reconcile_with_ids(&Bytes::from_hex(q).unwrap(), &mut have_ids, &mut need_ids)
-                    .unwrap()
-                    .to_hex();
+                    .unwrap();
 
                 for id in have_ids.into_iter() {
                     println!("have,{}", id.to_hex());
@@ -56,9 +55,11 @@ fn main() {
                     println!("need,{}", id.to_hex());
                 }
 
-                if q.is_empty() {
+                if resp.is_none() {
                     println!("done");
                     continue;
+                } else {
+                    q = resp.unwrap().to_hex();
                 }
             } else {
                 q = ne.reconcile(&Bytes::from_hex(q).unwrap()).unwrap().to_hex();

@@ -66,7 +66,7 @@ fn main() {
         .unwrap();
     println!(
         "Reconcile Output with IDs: {}",
-        reconcile_output_with_ids.as_hex()
+        reconcile_output_with_ids.unwrap().as_hex()
     );
     println!(
         "Have IDs: {}",
