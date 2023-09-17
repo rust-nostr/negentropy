@@ -23,7 +23,6 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt;
-use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 use sha2::{Sha256, Digest};
@@ -153,14 +152,6 @@ impl Ord for Item {
             self.timestamp.cmp(&other.timestamp)
         } else {
             self.id.cmp(&other.id)
-        }
-    }
-}
-
-impl BitXorAssign for Item {
-    fn bitxor_assign(&mut self, other: Self) {
-        for i in 0..32 {
-            self.id[i] ^= other.id[i];
         }
     }
 }
