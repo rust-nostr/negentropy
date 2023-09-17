@@ -55,11 +55,11 @@ fn main() {
                     println!("need,{}", id.to_hex());
                 }
 
-                if resp.is_none() {
+                if let Some(resp) = resp {
+                    q = resp.to_hex();
+                } else {
                     println!("done");
                     continue;
-                } else {
-                    q = resp.unwrap().to_hex();
                 }
             } else {
                 q = ne.reconcile(&Bytes::from_hex(q).unwrap()).unwrap().to_hex();
