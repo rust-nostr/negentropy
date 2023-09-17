@@ -25,10 +25,10 @@ use core::convert::TryFrom;
 use core::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-use sha2::{Sha256, Digest};
 
 mod bytes;
 mod hex;
+mod sha256;
 
 pub use self::bytes::Bytes;
 
@@ -70,6 +70,13 @@ pub enum Error {
     InvalidProtocolVersion,
     /// Unsupported protocol version
     UnsupportedProtocolVersion,
+    /// Unexpected output
+    UnexpectedOutput {
+        /// Expected output
+        expected: String,
+        /// Found output
+        found: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -89,7 +96,14 @@ impl fmt::Display for Error {
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
             Self::DuplicateItemAdded => write!(f, "duplicate item added"),
             Self::InvalidProtocolVersion => write!(f, "invalid negentropy protocol version byte"),
-            Self::UnsupportedProtocolVersion => write!(f, "server does not support our negentropy protocol version"),
+            Self::UnsupportedProtocolVersion => {
+                write!(f, "server does not support our negentropy protocol version")
+            }
+            Self::UnexpectedOutput { expected, found } => write!(
+                f,
+                "Unexpected output: expected={}, found={}",
+                expected, found
+            ),
         }
     }
 }
@@ -221,7 +235,7 @@ impl Negentropy {
         }
 
         Ok(Self {
-            id_size: id_size,
+            id_size,
             frame_size_limit,
             added_items: Vec::new(),
             item_timestamps: Vec::new(),
@@ -270,15 +284,14 @@ impl Negentropy {
         &self.item_ids[offset..(offset + self.id_size)]
     }
 
-    fn get_item(&self, i: usize) -> Item {
-        Item::with_timestamp_and_id(self.item_timestamps[i], self.get_item_id(i)).unwrap()
+    fn get_item(&self, i: usize) -> Result<Item, Error> {
+        Item::with_timestamp_and_id(self.item_timestamps[i], self.get_item_id(i))
     }
 
     fn compute_fingerprint(&self, lower: usize, num: usize) -> Vec<u8> {
-        let mut hasher = Sha256::new();
         let offset = lower * self.id_size;
-        hasher.update(&self.item_ids[offset..(offset + (num * self.id_size))]);
-        hasher.finalize().as_slice()[0..self.id_size].to_vec()
+        sha256::hash(&self.item_ids[offset..(offset + (num * self.id_size))])[0..self.id_size]
+            .to_vec()
     }
 
     /// Seal
@@ -336,28 +349,34 @@ impl Negentropy {
 
         self.pending_outputs = outputs;
 
-        Ok(self.build_output(true).unwrap().unwrap())
+        self.build_output(true)?.ok_or(Error::UnexpectedOutput {
+            expected: String::from("Initiate bytes"),
+            found: String::from("None"),
+        })
     }
 
     /// Reconcile (server method)
     pub fn reconcile(&mut self, query: &Bytes) -> Result<Bytes, Error> {
-        let mut query: &[u8] = query.as_ref();
-
         if self.is_initiator {
             return Err(Error::Initiator);
         }
 
+        let mut query: &[u8] = query.as_ref();
+
         if !self.did_handshake {
             let protocol_version = self.get_bytes(&mut query, 1)?[0] as u64;
 
-            if protocol_version < 0x60 || protocol_version > 0x6F {
+            if !(0x60..=0x6F).contains(&protocol_version) {
                 return Err(Error::InvalidProtocolVersion);
             }
 
             if protocol_version != PROTOCOL_VERSION_0 {
                 let mut o: Vec<u8> = Vec::new();
                 let mut last_timestamp_out: u64 = 0;
-                o.extend(self.encode_bound(&Item::with_timestamp(PROTOCOL_VERSION_0), &mut last_timestamp_out));
+                o.extend(self.encode_bound(
+                    &Item::with_timestamp(PROTOCOL_VERSION_0),
+                    &mut last_timestamp_out,
+                ));
                 o.extend(self.encode_mode(Mode::UnsupportedProtocolVersion));
                 return Ok(Bytes::from(o));
             }
@@ -365,9 +384,12 @@ impl Negentropy {
             self.did_handshake = true;
         }
 
-        self.reconcile_aux(&mut query, &mut Vec::new(), &mut Vec::new())?;
+        self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())?;
 
-        Ok(self.build_output(false).unwrap().unwrap())
+        self.build_output(false)?.ok_or(Error::UnexpectedOutput {
+            expected: String::from("Reconcilie bytes"),
+            found: String::from("None"),
+        })
     }
 
     /// Reconcile (client method)
@@ -377,14 +399,12 @@ impl Negentropy {
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
     ) -> Result<Option<Bytes>, Error> {
-        let mut query: &[u8] = query.as_ref();
-
         if !self.is_initiator {
             return Err(Error::NonInitiator);
         }
 
-        self.reconcile_aux(&mut query, have_ids, need_ids)?;
-
+        let query: &[u8] = query.as_ref();
+        self.reconcile_aux(query, have_ids, need_ids)?;
         self.build_output(false)
     }
 
@@ -415,17 +435,11 @@ impl Negentropy {
             match mode {
                 Mode::Skip => (),
                 Mode::Fingerprint => {
-                    let their_fingerprint = self.get_bytes(&mut query, self.id_size)?;
-                    let our_fingerprint = self.compute_fingerprint(lower, upper - lower);
+                    let their_fingerprint: Vec<u8> = self.get_bytes(&mut query, self.id_size)?;
+                    let our_fingerprint: Vec<u8> = self.compute_fingerprint(lower, upper - lower);
 
                     if their_fingerprint != our_fingerprint {
-                        self.split_range(
-                            lower,
-                            upper,
-                            prev_bound,
-                            curr_bound,
-                            &mut outputs,
-                        )?;
+                        self.split_range(lower, upper, prev_bound, curr_bound, &mut outputs)?;
                     }
                 }
                 Mode::IdList => {
@@ -534,7 +548,7 @@ impl Negentropy {
         let next_split_bound: Item = if *it + 1 >= upper {
             *curr_bound
         } else {
-            self.get_minimal_bound(&self.get_item(*it), &self.get_item(*it + 1))?
+            self.get_minimal_bound(&self.get_item(*it)?, &self.get_item(*it + 1)?)?
         };
 
         outputs.push_back(OutputRange {
@@ -579,10 +593,11 @@ impl Negentropy {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
             let mut curr: usize = lower;
-            let mut prev_bound = self.get_item(lower);
+            let mut prev_bound: Item = self.get_item(lower)?;
 
             for i in 0..BUCKETS {
-                let bucket_size: usize = items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
+                let bucket_size: usize =
+                    items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
                 let our_fingerprint = self.compute_fingerprint(curr, bucket_size);
                 curr += bucket_size;
 
@@ -595,7 +610,7 @@ impl Negentropy {
                     end: if curr == upper {
                         upper_bound
                     } else {
-                        self.get_minimal_bound(&self.get_item(curr - 1), &self.get_item(curr))?
+                        self.get_minimal_bound(&self.get_item(curr - 1)?, &self.get_item(curr)?)?
                     },
                     payload,
                 });
@@ -690,7 +705,7 @@ impl Negentropy {
             if cond {
                 count = step;
             } else {
-                it = it + 1;
+                it += 1;
                 first = it;
                 count -= step + 1;
             }
@@ -805,7 +820,7 @@ impl Negentropy {
         } else {
             let mut shared_prefix_bytes: usize = 0;
             for i in 0..prev.id_size().min(curr.id_size()) {
-                if curr.id[i as usize] != prev.id[i as usize] {
+                if curr.id[i] != prev.id[i] {
                     break;
                 }
                 shared_prefix_bytes += 1;
@@ -922,7 +937,7 @@ mod benches {
 
     use super::{Bytes, Negentropy};
 
-    const ID_SIZE: u8 = 16;
+    const ID_SIZE: usize = 16;
     const FRAME_SIZE_LIMIT: Option<u64> = None;
     const ITEMS_LEN: usize = 100_000;
 
@@ -935,51 +950,6 @@ mod benches {
                 Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
             ))
             .unwrap();
-        });
-    }
-
-    #[bench]
-    pub fn initiate_100_000_items(bh: &mut Bencher) {
-        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
-        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
-            .into_iter()
-            .enumerate()
-        {
-            client
-                .add_item(index as u64, Bytes::from_hex(item).unwrap())
-                .unwrap();
-        }
-        client.seal().unwrap();
-        bh.iter(|| {
-            black_box(client.initiate()).unwrap();
-        });
-    }
-
-    #[bench]
-    pub fn reconcile_100_000_items(bh: &mut Bencher) {
-        // Client
-        let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
-        for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
-            client
-                .add_item(index as u64, Bytes::from_hex(item).unwrap())
-                .unwrap();
-        }
-        client.seal().unwrap();
-        let init_output = client.initiate().unwrap();
-
-        let mut relay = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
-        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
-            .into_iter()
-            .enumerate()
-        {
-            relay
-                .add_item(index as u64, Bytes::from_hex(item).unwrap())
-                .unwrap();
-        }
-        relay.seal().unwrap();
-
-        bh.iter(|| {
-            black_box(relay.reconcile(&init_output)).unwrap();
         });
     }
 

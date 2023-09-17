@@ -15,6 +15,3 @@ std = []
 
 [[example]]
 name = "negentropy"
-
-[dependencies]
-sha2 = "0.10.7"
