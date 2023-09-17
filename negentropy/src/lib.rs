@@ -23,15 +23,16 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::convert::TryFrom;
 use core::fmt;
-use core::ops::BitXorAssign;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+use sha2::{Sha256, Digest};
 
 mod bytes;
 mod hex;
 
 pub use self::bytes::Bytes;
 
+const PROTOCOL_VERSION_0: u64 = 0x60;
 const MAX_U64: u64 = u64::MAX;
 const BUCKETS: usize = 16;
 const DOUBLE_BUCKETS: usize = BUCKETS * 2;
@@ -51,18 +52,24 @@ pub enum Error {
     NotSealed,
     /// Already sealed
     AlreadySealed,
+    /// Already built initial message
+    AlreadyBuiltInitialMessage,
     /// Initiator error
     Initiator,
     /// Non-initiator error
     NonInitiator,
-    /// Deprecated protocol
-    DeprecatedProtocol,
+    /// Initiate after reconcile
+    InitiateAfterReconcile,
     /// Unexpected mode
     UnexpectedMode(u64),
     /// Parse ends prematurely
     ParseEndsPrematurely,
-    /// Prepature end of var int
-    PrematureEndOfVarInt,
+    /// Duplicate item added
+    DuplicateItemAdded,
+    /// Invalid protocol version
+    InvalidProtocolVersion,
+    /// Unsupported protocol version
+    UnsupportedProtocolVersion,
 }
 
 impl fmt::Display for Error {
@@ -74,32 +81,35 @@ impl fmt::Display for Error {
             Self::FrameSizeLimitTooSmall => write!(f, "Frame size limit too small"),
             Self::NotSealed => write!(f, "Not sealed"),
             Self::AlreadySealed => write!(f, "Already sealed"),
+            Self::AlreadyBuiltInitialMessage => write!(f, "Already built initial message"),
             Self::Initiator => write!(f, "initiator not asking for have/need IDs"),
             Self::NonInitiator => write!(f, "non-initiator asking for have/need IDs"),
-            Self::DeprecatedProtocol => write!(f, "Other side is speaking old negentropy protocol"),
+            Self::InitiateAfterReconcile => write!(f, "can't initiate after reconcile"),
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
-            Self::PrematureEndOfVarInt => write!(f, "premature end of varint"),
+            Self::DuplicateItemAdded => write!(f, "duplicate item added"),
+            Self::InvalidProtocolVersion => write!(f, "invalid negentropy protocol version byte"),
+            Self::UnsupportedProtocolVersion => write!(f, "server does not support our negentropy protocol version"),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct XorElem {
+struct Item {
     timestamp: u64,
-    id_size: u8,
+    id_size: usize,
     id: [u8; 32],
 }
 
-impl XorElem {
+impl Item {
     fn new() -> Self {
         Self::default()
     }
 
     fn with_timestamp(timestamp: u64) -> Self {
-        let mut xor_elem = Self::new();
-        xor_elem.timestamp = timestamp;
-        xor_elem
+        let mut item = Self::new();
+        item.timestamp = timestamp;
+        item
     }
 
     fn with_timestamp_and_id<T>(timestamp: u64, id: T) -> Result<Self, Error>
@@ -113,34 +123,30 @@ impl XorElem {
             return Err(Error::IdTooBig);
         }
 
-        let mut xor_elem = Self::new();
-        xor_elem.timestamp = timestamp;
-        xor_elem.id_size = len as u8;
-        xor_elem.id[..len].copy_from_slice(id);
+        let mut item = Self::new();
+        item.timestamp = timestamp;
+        item.id_size = len;
+        item.id[..len].copy_from_slice(id);
 
-        Ok(xor_elem)
+        Ok(item)
     }
 
-    fn id_size(&self) -> u8 {
+    fn id_size(&self) -> usize {
         self.id_size
     }
 
     fn get_id(&self) -> &[u8] {
-        self.id.get(..self.id_size as usize).unwrap_or_default()
-    }
-
-    fn get_id_subsize(&self, sub_size: u64) -> &[u8] {
-        self.id.get(..sub_size as usize).unwrap_or_default()
+        self.id.get(..self.id_size).unwrap_or_default()
     }
 }
 
-impl PartialOrd for XorElem {
+impl PartialOrd for Item {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for XorElem {
+impl Ord for Item {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.timestamp != other.timestamp {
             self.timestamp.cmp(&other.timestamp)
@@ -150,18 +156,10 @@ impl Ord for XorElem {
     }
 }
 
-impl BitXorAssign for XorElem {
-    fn bitxor_assign(&mut self, other: Self) {
-        for i in 0..32 {
-            self.id[i] ^= other.id[i];
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
-struct BoundOutput {
-    start: XorElem,
-    end: XorElem,
+struct OutputRange {
+    start: Item,
+    end: Item,
     payload: Vec<u8>,
 }
 
@@ -171,8 +169,8 @@ enum Mode {
     Skip = 0,
     Fingerprint = 1,
     IdList = 2,
-    Deprecated = 3,
-    Continuation = 4,
+    Continuation = 3,
+    UnsupportedProtocolVersion = 4,
 }
 
 impl Mode {
@@ -188,8 +186,7 @@ impl TryFrom<u64> for Mode {
             0 => Ok(Mode::Skip),
             1 => Ok(Mode::Fingerprint),
             2 => Ok(Mode::IdList),
-            3 => Ok(Mode::Deprecated),
-            4 => Ok(Mode::Continuation),
+            3 => Ok(Mode::Continuation),
             m => Err(Error::UnexpectedMode(m)),
         }
     }
@@ -198,18 +195,21 @@ impl TryFrom<u64> for Mode {
 /// Negentropy
 #[derive(Debug, Clone)]
 pub struct Negentropy {
-    id_size: u64,
+    id_size: usize,
     frame_size_limit: Option<u64>,
-    items: Vec<XorElem>,
+    added_items: Vec<Item>,
+    item_timestamps: Vec<u64>,
+    item_ids: Vec<u8>,
     sealed: bool,
     is_initiator: bool,
+    did_handshake: bool,
     continuation_needed: bool,
-    pending_outputs: VecDeque<BoundOutput>,
+    pending_outputs: VecDeque<OutputRange>,
 }
 
 impl Negentropy {
     /// Create new [`Negentropy`] instance
-    pub fn new(id_size: u8, frame_size_limit: Option<u64>) -> Result<Self, Error> {
+    pub fn new(id_size: usize, frame_size_limit: Option<u64>) -> Result<Self, Error> {
         if !(8..=32).contains(&id_size) {
             return Err(Error::InvalidIdSize);
         }
@@ -221,11 +221,14 @@ impl Negentropy {
         }
 
         Ok(Self {
-            id_size: id_size as u64,
+            id_size: id_size,
             frame_size_limit,
-            items: Vec::new(),
+            added_items: Vec::new(),
+            item_timestamps: Vec::new(),
+            item_ids: Vec::new(),
             sealed: false,
             is_initiator: false,
+            did_handshake: false,
             continuation_needed: false,
             pending_outputs: VecDeque::new(),
         })
@@ -248,14 +251,34 @@ impl Negentropy {
         }
 
         let id: &[u8] = id.as_ref();
-        if id.len() != self.id_size as usize {
+        if id.len() < self.id_size {
             return Err(Error::IdSizeNotMatch);
         }
 
-        let elem: XorElem = XorElem::with_timestamp_and_id(created_at, id)?;
+        let elem: Item = Item::with_timestamp_and_id(created_at, &id[0..self.id_size])?;
 
-        self.items.push(elem);
+        self.added_items.push(elem);
         Ok(())
+    }
+
+    fn num_items(&self) -> usize {
+        self.item_timestamps.len()
+    }
+
+    fn get_item_id(&self, i: usize) -> &[u8] {
+        let offset = i * self.id_size;
+        &self.item_ids[offset..(offset + self.id_size)]
+    }
+
+    fn get_item(&self, i: usize) -> Item {
+        Item::with_timestamp_and_id(self.item_timestamps[i], self.get_item_id(i)).unwrap()
+    }
+
+    fn compute_fingerprint(&self, lower: usize, num: usize) -> Vec<u8> {
+        let mut hasher = Sha256::new();
+        let offset = lower * self.id_size;
+        hasher.update(&self.item_ids[offset..(offset + (num * self.id_size))]);
+        hasher.finalize().as_slice()[0..self.id_size].to_vec()
     }
 
     /// Seal
@@ -263,9 +286,29 @@ impl Negentropy {
         if self.sealed {
             return Err(Error::AlreadySealed);
         }
-
-        self.items.sort();
         self.sealed = true;
+
+        self.added_items.sort();
+
+        if self.added_items.len() > 1 {
+            for i in 0..(self.added_items.len() - 1) {
+                if self.added_items[i] == self.added_items[i + 1] {
+                    return Err(Error::DuplicateItemAdded);
+                }
+            }
+        }
+
+        self.item_timestamps.reserve_exact(self.added_items.len());
+        self.item_ids.reserve_exact(self.added_items.len());
+
+        for item in self.added_items.iter() {
+            self.item_timestamps.push(item.timestamp);
+            self.item_ids.extend(item.get_id());
+        }
+
+        self.added_items.clear();
+        self.added_items.shrink_to_fit();
+
         Ok(())
     }
 
@@ -275,48 +318,79 @@ impl Negentropy {
             return Err(Error::NotSealed);
         }
 
+        if self.did_handshake {
+            return Err(Error::InitiateAfterReconcile);
+        }
+
         self.is_initiator = true;
 
-        let mut outputs: VecDeque<BoundOutput> = VecDeque::new();
+        let mut outputs: VecDeque<OutputRange> = VecDeque::new();
 
         self.split_range(
-            &self.items,
-            XorElem::new(),
-            XorElem::with_timestamp(MAX_U64),
+            0,
+            self.num_items(),
+            Item::new(),
+            Item::with_timestamp(MAX_U64),
             &mut outputs,
         )?;
 
         self.pending_outputs = outputs;
 
-        self.build_output()
+        Ok(self.build_output(true).unwrap().unwrap())
     }
 
-    /// Reconcilie
+    /// Reconcile (server method)
     pub fn reconcile(&mut self, query: &Bytes) -> Result<Bytes, Error> {
+        let mut query: &[u8] = query.as_ref();
+
         if self.is_initiator {
             return Err(Error::Initiator);
         }
-        self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())?;
-        self.build_output()
+
+        if !self.did_handshake {
+            let protocol_version = self.get_bytes(&mut query, 1)?[0] as u64;
+
+            if protocol_version < 0x60 || protocol_version > 0x6F {
+                return Err(Error::InvalidProtocolVersion);
+            }
+
+            if protocol_version != PROTOCOL_VERSION_0 {
+                let mut o: Vec<u8> = Vec::new();
+                let mut last_timestamp_out: u64 = 0;
+                o.extend(self.encode_bound(&Item::with_timestamp(PROTOCOL_VERSION_0), &mut last_timestamp_out));
+                o.extend(self.encode_mode(Mode::UnsupportedProtocolVersion));
+                return Ok(Bytes::from(o));
+            }
+
+            self.did_handshake = true;
+        }
+
+        self.reconcile_aux(&mut query, &mut Vec::new(), &mut Vec::new())?;
+
+        Ok(self.build_output(false).unwrap().unwrap())
     }
 
-    /// Reconcilie
+    /// Reconcile (client method)
     pub fn reconcile_with_ids(
         &mut self,
         query: &Bytes,
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Option<Bytes>, Error> {
+        let mut query: &[u8] = query.as_ref();
+
         if !self.is_initiator {
             return Err(Error::NonInitiator);
         }
-        self.reconcile_aux(query, have_ids, need_ids)?;
-        self.build_output()
+
+        self.reconcile_aux(&mut query, have_ids, need_ids)?;
+
+        self.build_output(false)
     }
 
     fn reconcile_aux(
         &mut self,
-        query: &Bytes,
+        mut query: &[u8],
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
     ) -> Result<(), Error> {
@@ -326,35 +400,28 @@ impl Negentropy {
 
         self.continuation_needed = false;
 
-        let mut prev_bound: XorElem = XorElem::new();
+        let mut prev_bound: Item = Item::new();
         let mut prev_index: usize = 0;
         let mut last_timestamp_in: u64 = 0;
-        let mut outputs: VecDeque<BoundOutput> = VecDeque::new();
-        let mut query: &[u8] = query.as_ref();
+        let mut outputs: VecDeque<OutputRange> = VecDeque::new();
 
         while !query.is_empty() {
-            let curr_bound: XorElem = self.decode_bound(&mut query, &mut last_timestamp_in)?;
+            let curr_bound: Item = self.decode_bound(&mut query, &mut last_timestamp_in)?;
             let mode: Mode = self.decode_mode(&mut query)?;
 
             let lower: usize = prev_index;
-            let upper: usize = binary_search_upper_bound(&self.items, curr_bound);
+            let upper: usize = self.find_upper_bound(prev_index, self.num_items(), &curr_bound);
 
             match mode {
                 Mode::Skip => (),
                 Mode::Fingerprint => {
-                    let their_xor_set: XorElem = XorElem::with_timestamp_and_id(
-                        0,
-                        self.get_bytes(&mut query, self.id_size)?,
-                    )?;
+                    let their_fingerprint = self.get_bytes(&mut query, self.id_size)?;
+                    let our_fingerprint = self.compute_fingerprint(lower, upper - lower);
 
-                    let mut our_xor_set: XorElem = XorElem::new();
-                    for i in lower..upper {
-                        our_xor_set ^= self.items[i];
-                    }
-
-                    if their_xor_set.get_id() != our_xor_set.get_id_subsize(self.id_size) {
+                    if their_fingerprint != our_fingerprint {
                         self.split_range(
-                            &self.items[lower..upper],
+                            lower,
+                            upper,
                             prev_bound,
                             curr_bound,
                             &mut outputs,
@@ -375,7 +442,7 @@ impl Negentropy {
                     }
 
                     for i in lower..upper {
-                        let k = self.items[i].get_id();
+                        let k = self.get_item_id(i);
                         if !their_elems.contains(k) {
                             if self.is_initiator {
                                 have_ids.push(Bytes::from(k));
@@ -393,10 +460,10 @@ impl Negentropy {
                         let mut response_have_ids: Vec<&[u8]> = Vec::with_capacity(100);
                         let mut it: usize = lower;
                         let mut did_split: bool = false;
-                        let mut split_bound: XorElem = XorElem::new();
+                        let mut split_bound: Item = Item::new();
 
                         while it < upper {
-                            let k: &[u8] = self.items[it].get_id();
+                            let k: &[u8] = self.get_item_id(it);
                             response_have_ids.push(k);
                             if response_have_ids.len() >= 100 {
                                 self.flush_id_list_output(
@@ -424,11 +491,11 @@ impl Negentropy {
                         )?;
                     }
                 }
-                Mode::Deprecated => {
-                    return Err(Error::DeprecatedProtocol);
-                }
                 Mode::Continuation => {
                     self.continuation_needed = true;
+                }
+                Mode::UnsupportedProtocolVersion => {
+                    return Err(Error::UnsupportedProtocolVersion);
                 }
             }
 
@@ -446,13 +513,13 @@ impl Negentropy {
     #[allow(clippy::too_many_arguments)]
     fn flush_id_list_output(
         &self,
-        outputs: &mut VecDeque<BoundOutput>,
+        outputs: &mut VecDeque<OutputRange>,
         upper: usize,
-        prev_bound: XorElem,
+        prev_bound: Item,
         did_split: &mut bool,
         it: &mut usize,
-        split_bound: &mut XorElem,
-        curr_bound: &XorElem,
+        split_bound: &mut Item,
+        curr_bound: &Item,
         response_have_ids: &mut Vec<&[u8]>,
     ) -> Result<(), Error> {
         let len: usize = response_have_ids.len();
@@ -464,13 +531,13 @@ impl Negentropy {
             payload.extend_from_slice(id);
         }
 
-        let next_split_bound: XorElem = if *it + 1 >= upper {
+        let next_split_bound: Item = if *it + 1 >= upper {
             *curr_bound
         } else {
-            self.get_minimal_bound(&self.items[*it], &self.items[*it + 1])?
+            self.get_minimal_bound(&self.get_item(*it), &self.get_item(*it + 1))?
         };
 
-        outputs.push_back(BoundOutput {
+        outputs.push_back(OutputRange {
             start: if *did_split { *split_bound } else { prev_bound },
             end: next_split_bound,
             payload,
@@ -486,23 +553,24 @@ impl Negentropy {
 
     fn split_range(
         &self,
-        items: &[XorElem],
-        lower_bound: XorElem,
-        upper_bound: XorElem,
-        outputs: &mut VecDeque<BoundOutput>,
+        lower: usize,
+        upper: usize,
+        lower_bound: Item,
+        upper_bound: Item,
+        outputs: &mut VecDeque<OutputRange>,
     ) -> Result<(), Error> {
-        let num_elems: usize = items.len();
+        let num_elems: usize = upper - lower;
 
         if num_elems < DOUBLE_BUCKETS {
             let mut payload: Vec<u8> = Vec::with_capacity(10 + 10 + num_elems);
             payload.extend(self.encode_mode(Mode::IdList));
             payload.extend(self.encode_var_int(num_elems as u64));
 
-            for elem in items.iter() {
-                payload.extend_from_slice(elem.get_id_subsize(self.id_size));
+            for i in 0..num_elems {
+                payload.extend_from_slice(self.get_item_id(lower + i));
             }
 
-            outputs.push_back(BoundOutput {
+            outputs.push_back(OutputRange {
                 start: lower_bound,
                 end: upper_bound,
                 payload,
@@ -510,29 +578,24 @@ impl Negentropy {
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
             let buckets_with_extra: usize = num_elems % BUCKETS;
-            let mut curr: usize = 0;
-            let mut prev_bound = items.first().copied().unwrap_or_default();
+            let mut curr: usize = lower;
+            let mut prev_bound = self.get_item(lower);
 
             for i in 0..BUCKETS {
-                let mut our_xor_set: XorElem = XorElem::new();
-                let bucket_end: usize =
-                    curr + items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
+                let bucket_size: usize = items_per_bucket + (if i < buckets_with_extra { 1 } else { 0 });
+                let our_fingerprint = self.compute_fingerprint(curr, bucket_size);
+                curr += bucket_size;
 
-                while curr != bucket_end {
-                    our_xor_set ^= items[curr];
-                    curr += 1;
-                }
-
-                let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size as usize);
+                let mut payload: Vec<u8> = Vec::with_capacity(10 + self.id_size);
                 payload.extend(self.encode_mode(Mode::Fingerprint));
-                payload.extend(our_xor_set.get_id_subsize(self.id_size));
+                payload.extend(our_fingerprint);
 
-                outputs.push_back(BoundOutput {
+                outputs.push_back(OutputRange {
                     start: if i == 0 { lower_bound } else { prev_bound },
-                    end: if bucket_end == items.len() {
+                    end: if curr == upper {
                         upper_bound
                     } else {
-                        self.get_minimal_bound(&items[curr - 1], &items[curr])?
+                        self.get_minimal_bound(&self.get_item(curr - 1), &self.get_item(curr))?
                     },
                     payload,
                 });
@@ -551,10 +614,18 @@ impl Negentropy {
         Ok(())
     }
 
-    fn build_output(&mut self) -> Result<Bytes, Error> {
+    fn build_output(&mut self, initial_message: bool) -> Result<Option<Bytes>, Error> {
         let mut output: Vec<u8> = Vec::new();
-        let mut curr_bound: XorElem = XorElem::new();
+        let mut curr_bound: Item = Item::new();
         let mut last_timestamp_out: u64 = 0;
+
+        if initial_message {
+            if self.did_handshake {
+                return Err(Error::AlreadyBuiltInitialMessage);
+            }
+            self.did_handshake = true;
+            output.push(PROTOCOL_VERSION_0 as u8);
+        }
 
         self.pending_outputs
             .make_contiguous()
@@ -588,20 +659,47 @@ impl Negentropy {
             self.pending_outputs.pop_front();
         }
 
-        if (!self.is_initiator && !self.pending_outputs.is_empty())
-            || (self.is_initiator && output.is_empty() && self.continuation_needed)
-        {
+        if !self.is_initiator && !self.pending_outputs.is_empty() {
             output.extend(
-                &self.encode_bound(&XorElem::with_timestamp(MAX_U64), &mut last_timestamp_out),
+                &self.encode_bound(&Item::with_timestamp(MAX_U64), &mut last_timestamp_out),
             );
             output.extend(self.encode_mode(Mode::Continuation));
         }
 
-        Ok(Bytes::from(output))
+        if self.is_initiator && output.is_empty() && !self.continuation_needed {
+            return Ok(None);
+        }
+
+        Ok(Some(Bytes::from(output)))
     }
 
-    fn get_bytes(&self, encoded: &mut &[u8], n: u64) -> Result<Vec<u8>, Error> {
-        let n = n as usize;
+    fn find_upper_bound(&self, mut first: usize, last: usize, value: &Item) -> usize {
+        let mut count: usize = last - first;
+
+        while count > 0 {
+            let mut it: usize = first;
+            let step: usize = count / 2;
+            it += step;
+
+            let cond: bool = if value.timestamp == self.item_timestamps[it] {
+                &value.id[0..self.id_size] < self.get_item_id(it)
+            } else {
+                value.timestamp < self.item_timestamps[it]
+            };
+
+            if cond {
+                count = step;
+            } else {
+                it = it + 1;
+                first = it;
+                count -= step + 1;
+            }
+        }
+
+        first
+    }
+
+    fn get_bytes(&self, encoded: &mut &[u8], n: usize) -> Result<Vec<u8>, Error> {
         if encoded.len() < n {
             return Err(Error::ParseEndsPrematurely);
         }
@@ -649,11 +747,11 @@ impl Negentropy {
         &self,
         encoded: &mut &[u8],
         last_timestamp_in: &mut u64,
-    ) -> Result<XorElem, Error> {
+    ) -> Result<Item, Error> {
         let timestamp = self.decode_timestamp_in(encoded, last_timestamp_in)?;
         let len = self.decode_var_int(encoded)?;
-        let id = self.get_bytes(encoded, len)?;
-        XorElem::with_timestamp_and_id(timestamp, id)
+        let id = self.get_bytes(encoded, len as usize)?;
+        Item::with_timestamp_and_id(timestamp, id)
     }
 
     fn encode_mode(&self, mode: Mode) -> Vec<u8> {
@@ -693,7 +791,7 @@ impl Negentropy {
         self.encode_var_int(timestamp.saturating_add(1))
     }
 
-    fn encode_bound(&self, bound: &XorElem, last_timestamp_out: &mut u64) -> Vec<u8> {
+    fn encode_bound(&self, bound: &Item, last_timestamp_out: &mut u64) -> Vec<u8> {
         let mut output: Vec<u8> = Vec::new();
         output.extend(self.encode_timestamp_out(bound.timestamp, last_timestamp_out));
         output.extend(self.encode_var_int(bound.id_size() as u64));
@@ -701,9 +799,9 @@ impl Negentropy {
         output
     }
 
-    fn get_minimal_bound(&self, prev: &XorElem, curr: &XorElem) -> Result<XorElem, Error> {
+    fn get_minimal_bound(&self, prev: &Item, curr: &Item) -> Result<Item, Error> {
         if curr.timestamp != prev.timestamp {
-            Ok(XorElem::with_timestamp(curr.timestamp))
+            Ok(Item::with_timestamp(curr.timestamp))
         } else {
             let mut shared_prefix_bytes: usize = 0;
             for i in 0..prev.id_size().min(curr.id_size()) {
@@ -712,28 +810,9 @@ impl Negentropy {
                 }
                 shared_prefix_bytes += 1;
             }
-            XorElem::with_timestamp_and_id(curr.timestamp, &curr.id[..shared_prefix_bytes + 1])
+            Item::with_timestamp_and_id(curr.timestamp, &curr.id[..shared_prefix_bytes + 1])
         }
     }
-}
-
-fn binary_search_upper_bound<T>(items: &[T], curr_bound: T) -> usize
-where
-    T: Ord,
-{
-    let mut low = 0;
-    let mut high = items.len();
-
-    while low < high {
-        let mid = low + (high - low) / 2;
-        if items[mid] < curr_bound {
-            low = mid + 1;
-        } else {
-            high = mid;
-        }
-    }
-
-    low
 }
 
 #[cfg(test)]
@@ -804,7 +883,7 @@ mod tests {
             .unwrap();
 
         // Check reconcile with IDs output
-        assert!(reconcile_output_with_ids.is_empty());
+        assert!(reconcile_output_with_ids.is_none());
 
         // Check have IDs
         assert!(have_ids.contains(&Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap()));

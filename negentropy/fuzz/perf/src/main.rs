@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use negentropy::{Bytes, Negentropy};
 
-const ID_SIZE: u8 = 10;
+const ID_SIZE: usize = 10;
 const FRAME_SIZE_LIMIT: Option<u64> = None;
 
 fn main() {
