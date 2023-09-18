@@ -249,9 +249,19 @@ impl Negentropy {
         })
     }
 
+    /// Get current ID size
+    pub fn id_size(&self) -> usize {
+        self.id_size
+    }
+
     /// Check if current instance it's an initiator
     pub fn is_initiator(&self) -> bool {
         self.is_initiator
+    }
+
+    /// Check if sealed
+    pub fn is_sealed(&self) -> bool {
+        self.sealed
     }
 
     /// Check if need to continue
@@ -261,7 +271,7 @@ impl Negentropy {
 
     /// Add item
     pub fn add_item(&mut self, created_at: u64, id: Bytes) -> Result<(), Error> {
-        if self.sealed {
+        if self.is_sealed() {
             return Err(Error::AlreadySealed);
         }
 
@@ -297,7 +307,7 @@ impl Negentropy {
 
     /// Seal
     pub fn seal(&mut self) -> Result<(), Error> {
-        if self.sealed {
+        if self.is_sealed() {
             return Err(Error::AlreadySealed);
         }
         self.sealed = true;
