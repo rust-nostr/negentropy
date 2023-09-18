@@ -28,7 +28,7 @@ use core::fmt;
 use std::collections::HashSet;
 
 mod bytes;
-mod hex;
+pub mod hex;
 mod sha256;
 
 pub use self::bytes::Bytes;

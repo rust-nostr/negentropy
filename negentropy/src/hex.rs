@@ -1,14 +1,22 @@
 // Copyright (c) 2022-2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
+//! Hex
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
+/// Hex error
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     /// An invalid character was found
-    InvalidHexCharacter { c: char, index: usize },
+    InvalidHexCharacter {
+        /// Char
+        c: char,
+        /// Char index
+        index: usize,
+    },
     /// A hex string's length needs to be even, as two digits correspond to
     /// one byte.
     OddLength,
@@ -37,6 +45,7 @@ fn from_digit(num: u8) -> char {
     }
 }
 
+/// Hex encode
 pub fn encode<T>(data: T) -> String
 where
     T: AsRef<[u8]>,
@@ -62,6 +71,7 @@ const fn val(c: u8, idx: usize) -> Result<u8, Error> {
     }
 }
 
+/// Hex decode
 pub fn decode<T>(hex: T) -> Result<Vec<u8>, Error>
 where
     T: AsRef<[u8]>,
