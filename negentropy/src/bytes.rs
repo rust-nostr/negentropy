@@ -5,7 +5,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-use crate::hex;
+use crate::{hex, Error};
 
 /// Bytes
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -33,7 +33,7 @@ impl Bytes {
     }
 
     /// Construct from hex
-    pub fn from_hex<T>(data: T) -> Result<Self, hex::Error>
+    pub fn from_hex<T>(data: T) -> Result<Self, Error>
     where
         T: AsRef<[u8]>,
     {

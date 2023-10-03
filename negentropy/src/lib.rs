@@ -28,7 +28,7 @@ use core::fmt;
 use std::collections::HashSet;
 
 mod bytes;
-pub mod hex;
+mod hex;
 mod sha256;
 
 pub use self::bytes::Bytes;
@@ -78,6 +78,8 @@ pub enum Error {
         /// Found output
         found: String,
     },
+    /// Hex error
+    Hex(hex::Error),
 }
 
 #[cfg(feature = "std")]
@@ -108,7 +110,14 @@ impl fmt::Display for Error {
                 "Unexpected output: expected={}, found={}",
                 expected, found
             ),
+            Self::Hex(e) => write!(f, "Hex: {}", e),
         }
+    }
+}
+
+impl From<hex::Error> for Error {
+    fn from(e: hex::Error) -> Self {
+        Self::Hex(e)
     }
 }
 
