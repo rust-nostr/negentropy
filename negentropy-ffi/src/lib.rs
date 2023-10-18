@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-mod error;
 mod bytes;
+mod error;
 
-use self::error::Result;
 pub use self::bytes::Bytes;
 pub use self::error::NegentropyError;
+use self::error::Result;
 
 pub struct ReconcileWithIds {
     pub have_ids: Vec<Arc<Bytes>>,
@@ -26,7 +26,10 @@ pub struct Negentropy {
 impl Negentropy {
     pub fn new(id_size: u8, frame_size_limit: Option<u64>) -> Result<Self> {
         Ok(Self {
-            inner: RwLock::new(negentropy::Negentropy::new(id_size as usize, frame_size_limit)?)
+            inner: RwLock::new(negentropy::Negentropy::new(
+                id_size as usize,
+                frame_size_limit,
+            )?),
         })
     }
 
@@ -67,25 +70,24 @@ impl Negentropy {
 
     pub fn reconcile(&self, query: Arc<Bytes>) -> Result<Arc<Bytes>> {
         let mut negentropy = self.inner.write();
-        Ok(Arc::new(negentropy.reconcile(query.as_ref().deref())?.into()))
+        Ok(Arc::new(
+            negentropy.reconcile(query.as_ref().deref())?.into(),
+        ))
     }
 
-    pub fn reconcile_with_ids(
-        &self,
-        query: Arc<Bytes>,
-    ) -> Result<ReconcileWithIds> {
+    pub fn reconcile_with_ids(&self, query: Arc<Bytes>) -> Result<ReconcileWithIds> {
         let mut negentropy = self.inner.write();
         let mut have_ids: Vec<negentropy::Bytes> = Vec::new();
         let mut need_ids: Vec<negentropy::Bytes> = Vec::new();
-        let output: Option<negentropy::Bytes> = negentropy.reconcile_with_ids(query.as_ref().deref(), &mut have_ids, &mut need_ids)?;
-        Ok(ReconcileWithIds { 
-            have_ids: have_ids.into_iter().map(|id| Arc::new(id.into())).collect(), 
-            need_ids: need_ids.into_iter().map(|id| Arc::new(id.into())).collect(), 
-            output: output.map(|o| Arc::new(o.into()))
+        let output: Option<negentropy::Bytes> =
+            negentropy.reconcile_with_ids(query.as_ref().deref(), &mut have_ids, &mut need_ids)?;
+        Ok(ReconcileWithIds {
+            have_ids: have_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
+            need_ids: need_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
+            output: output.map(|o| Arc::new(o.into())),
         })
     }
 }
-
 
 // UDL
 uniffi::include_scaffolding!("negentropy");

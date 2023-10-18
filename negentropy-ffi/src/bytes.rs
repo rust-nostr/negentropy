@@ -25,13 +25,13 @@ impl From<negentropy::Bytes> for Bytes {
 impl Bytes {
     pub fn new(bytes: Vec<u8>) -> Self {
         Self {
-            inner: negentropy::Bytes::new(bytes)
+            inner: negentropy::Bytes::new(bytes),
         }
     }
 
     pub fn from_hex(data: String) -> Result<Self> {
         Ok(Self {
-            inner: negentropy::Bytes::from_hex(data)?
+            inner: negentropy::Bytes::from_hex(data)?,
         })
     }
 

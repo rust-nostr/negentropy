@@ -2,6 +2,7 @@ precommit:
 	cargo fmt --all -- --config format_code_in_doc_comments=true
 	cargo clippy -p negentropy && cargo clippy -p negentropy --no-default-features
 	cargo test -p negentropy && cargo test -p negentropy --no-default-features
+	cargo build -p negentropy-ffi && cargo clippy -p negentropy-ffi && cargo test -p negentropy-ffi
 
 bench:
 	RUSTFLAGS='--cfg=bench' cargo +nightly bench -p negentropy
