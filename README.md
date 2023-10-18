@@ -9,7 +9,7 @@ Implementation of the [negentropy](https://github.com/hoytech/negentropy) set-re
 The project is split up into many crates:
 
 * [**negentropy**](./negentropy/): Rust implementation of the negentropy set-reconciliation protocol
-* [**negentropy-ffi**](./negentropy-ffi/): UniFFI bindings (Swift, Kotlin and Python) of the [negentropy](./negentropy/) crate (TODO)
+* [**negentropy-ffi**](./negentropy-ffi/): UniFFI bindings (Swift, Kotlin and Python) of the [negentropy](./negentropy/) crate
 
 ## Flame Graph and perf
 
