@@ -60,4 +60,36 @@ jobs:
     - name: Clippy
       if: ${{ matrix.rust.version != '1.48.0' }}
       run: cargo clippy ${{ matrix.build-args }} -- -D warnings
+
+  build-ffi:
+    name: Build FFI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./negentropy-ffi
+    strategy:
+      matrix:
+        rust:
+          - version: stable # STABLE
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-ffi-${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
+    - name: Set default toolchain
+      run: rustup default ${{ matrix.rust.version }}
+    - name: Set profile
+      run: rustup set profile minimal && rustup component add clippy
+    - name: Build
+      run: cargo build
+    - name: Tests
+      run: cargo test
+    - name: Clippy
+      run: cargo clippy -- -D warnings
   
