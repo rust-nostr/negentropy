@@ -1,0 +1,3 @@
+include ./src/negentropy/libnegentropy_ffi.dylib
+include ./src/negentropy/libnegentropy_ffi.so
+include ./src/negentropy/negentropy_ffi.dll

@@ -1,0 +1,16 @@
+.tox/
+dist/
+negentropy.egg-info/
+__pycache__/
+libnegentropy_ffi.dylib
+.idea/
+.DS_Store
+
+*.swp
+
+src/negentropy/negentropy.py
+src/negentropy/*.so
+*.whl
+build/
+
+testing-setup-py-simple-example.py
