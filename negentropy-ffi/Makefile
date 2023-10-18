@@ -1,3 +1,9 @@
+precommit:
+	cargo fmt --all -- --config format_code_in_doc_comments=true
+	cargo build -p negentropy-ffi
+	cargo clippy -p negentropy-ffi
+	cargo test -p negentropy-ffi
+
 python:
 	rm -rf bindings-python/dist
 	pip install -r bindings-python/requirements.txt --break-system-packages

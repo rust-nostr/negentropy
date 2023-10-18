@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
 publish = false
 
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
 [lib]
 name = "negentropy_ffi"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -21,3 +25,7 @@ uniffi = { version = "0.24", features = ["cli"] }
 [build-dependencies]
 uniffi = { version = "0.24", features = ["build"] }
 
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
