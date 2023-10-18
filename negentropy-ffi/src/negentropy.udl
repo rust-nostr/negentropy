@@ -1,0 +1,42 @@
+// Copyright (c) 2022-2023 Yuki Kishimoto
+// Distributed under the MIT software license
+
+namespace negentropy {};
+
+[Error]
+interface NegentropyError {
+    Generic(string err);
+};
+
+interface Bytes {
+    constructor(bytes bytes);
+    [Throws=NegentropyError, Name=from_hex]
+    constructor(string data);
+    string as_hex();
+    bytes as_bytes();
+};
+
+dictionary ReconcileWithIds {
+    sequence<Bytes> have_ids;
+    sequence<Bytes> need_ids;
+    Bytes? output;
+};
+
+interface Negentropy {
+    [Throws=NegentropyError]
+    constructor(u8 id_size, u64? frame_size_limit);
+    u64 id_size();
+    boolean is_initiator();
+    boolean is_sealed();
+    boolean continuation_needed();
+    [Throws=NegentropyError]
+    void add_item(u64 created_at, Bytes id);
+    [Throws=NegentropyError]
+    void seal();
+    [Throws=NegentropyError]
+    Bytes initiate();
+    [Throws=NegentropyError]
+    Bytes reconcile(Bytes query);
+    [Throws=NegentropyError]
+    ReconcileWithIds reconcile_with_ids(Bytes query);
+};

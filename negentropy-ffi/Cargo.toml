@@ -1,0 +1,23 @@
+[package]
+name = "negentropy-ffi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yuki Kishimoto <yukikishimoto@protonmail.com>"]
+publish = false
+
+[lib]
+name = "negentropy_ffi"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+negentropy  = { path = "../negentropy" }
+parking_lot = "0.12"
+uniffi = { version = "0.24", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.24", features = ["build"] }
+

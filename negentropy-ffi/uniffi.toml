@@ -1,0 +1,10 @@
+[bindings.kotlin]
+package_name = "negentropy"
+cdylib_name = "negentropy_ffi"
+
+[bindings.swift]
+ffi_module_filename = "negentropyFFI"
+cdylib_name = "negentropy_ffi"
+
+[bindings.python]
+cdylib_name = "negentropy_ffi"

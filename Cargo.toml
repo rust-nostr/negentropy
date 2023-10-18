@@ -3,7 +3,9 @@ members = [
     "negentropy",
     "negentropy/fuzz/harness",
     "negentropy/fuzz/perf",
+    "negentropy-ffi",
 ]
+resolver = "2"
 
 [profile.release]
 lto = true
