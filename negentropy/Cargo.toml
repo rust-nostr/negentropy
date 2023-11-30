@@ -15,3 +15,6 @@ std = []
 
 [[example]]
 name = "negentropy"
+
+[dependencies]
+byteorder = "0.3.13"
