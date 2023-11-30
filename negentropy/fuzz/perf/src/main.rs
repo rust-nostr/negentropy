@@ -4,35 +4,35 @@
 use std::time::Instant;
 
 use negentropy::{Bytes, Negentropy};
-
-const ID_SIZE: usize = 10;
-const FRAME_SIZE_LIMIT: Option<u64> = None;
+use negentropy::storage::{NegentropyStorageVector};
 
 fn main() {
     let items = relay_set();
 
     // Client
-    let mut client = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
-    client
-        .add_item(0, Bytes::from_hex("aaaaaaaaaaaaaaaaaaaa").unwrap())
+    let mut storage_client = NegentropyStorageVector::new().unwrap();
+    storage_client
+        .insert(0, Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap())
         .unwrap();
-    client
-        .add_item(1, Bytes::from_hex("bbbbbbbbbbbbbbbbbbbb").unwrap())
+    storage_client
+        .insert(1, Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap())
         .unwrap();
-    client.seal().unwrap();
+    storage_client.seal().unwrap();
+    let mut client = Negentropy::new(&mut storage_client, 0).unwrap();
     let now = Instant::now();
     let init_output = client.initiate().unwrap();
     println!("Client init took {} ms", now.elapsed().as_millis());
 
     // Relay
-    let mut relay = Negentropy::new(ID_SIZE, FRAME_SIZE_LIMIT).unwrap();
+    let mut storage_relay = NegentropyStorageVector::new().unwrap();
     println!("Relay items: {}", items.len());
     for (index, item) in items.into_iter().enumerate() {
-        relay
-            .add_item(index as u64, Bytes::from_hex(item).unwrap())
+        storage_relay
+            .insert(index as u64, Bytes::from_hex(item).unwrap())
             .unwrap();
     }
-    relay.seal().unwrap();
+    storage_relay.seal().unwrap();
+    let mut relay = Negentropy::new(&mut storage_relay, 0).unwrap();
     let now = Instant::now();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
     println!("Relay reconcile took {} ms", now.elapsed().as_millis());
@@ -49,7 +49,7 @@ fn main() {
 
 fn relay_set() -> Vec<String> {
     let characters = "abc";
-    let length = 20;
+    let length = 64;
     let max = 1_000_000;
     generate_combinations(characters, length, max)
 }

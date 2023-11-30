@@ -5,7 +5,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-use crate::{hex, Error};
+use crate::error;
+use crate::hex;
+
+pub use self::error::Error;
+
 
 /// Bytes
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
