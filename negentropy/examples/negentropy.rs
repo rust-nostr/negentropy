@@ -1,63 +1,69 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use negentropy::{Bytes, Negentropy};
-use negentropy::storage::{NegentropyStorageVector};
+use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
 
 fn main() {
     // Client
-    let mut storage_client = NegentropyStorageVector::new().unwrap();
+    let mut storage_client = NegentropyStorageVector::new();
     storage_client
         .insert(
             0,
-            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .unwrap(),
         )
         .unwrap();
     storage_client
         .insert(
             1,
-            Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
+            Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                .unwrap(),
         )
         .unwrap();
     storage_client.seal().unwrap();
-    let mut client = Negentropy::new(&mut storage_client, 0).unwrap();
+    let mut client = Negentropy::new(storage_client, 0).unwrap();
     let init_output = client.initiate().unwrap();
     println!("Initiator Output: {}", init_output.as_hex());
 
     // Relay
-    let mut storage_relay = NegentropyStorageVector::new().unwrap();
+    let mut storage_relay = NegentropyStorageVector::new();
     storage_relay
         .insert(
             0,
-            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             2,
-            Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc").unwrap(),
+            Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             3,
-            Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111").unwrap(),
+            Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+                .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             5,
-            Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222").unwrap(),
+            Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+                .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             10,
-            Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333").unwrap(),
+            Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+                .unwrap(),
         )
         .unwrap();
     storage_relay.seal().unwrap();
-    let mut relay = Negentropy::new(&mut storage_relay, 0).unwrap();
+    let mut relay = Negentropy::new(storage_relay, 0).unwrap();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
     println!("Reconcile Output: {}", reconcile_output.as_hex());
 

@@ -1,3 +1,4 @@
+// Copyright (c) 2023 Doug Hoyte
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
@@ -18,59 +19,56 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 #[cfg(feature = "std")]
-use std::convert::TryFrom;
-
 use std::collections::HashSet;
 
-mod error;
-mod encoding;
 mod bytes;
+mod constants;
+mod encoding;
+mod error;
 mod hex;
 mod sha256;
+mod storage;
 mod types;
 
-/// Module that contains the various storage implementations
-pub mod storage;
-
 pub use self::bytes::Bytes;
+pub use self::constants::{FINGERPRINT_SIZE, ID_SIZE, PROTOCOL_VERSION};
+use self::encoding::{decode_var_int, encode_var_int, get_bytes};
 pub use self::error::Error;
-pub use self::storage::{NegentropyStorageBase};
-
-use self::types::{PROTOCOL_VERSION, ID_SIZE, FINGERPRINT_SIZE, Mode, Item, Bound};
-use self::encoding::{get_bytes, decode_var_int, encode_var_int};
-
+pub use self::storage::{NegentropyStorageBase, NegentropyStorageVector};
+use self::types::Mode;
+pub use self::types::{Bound, Item};
 
 const MAX_U64: u64 = u64::MAX;
 const BUCKETS: usize = 16;
 const DOUBLE_BUCKETS: usize = BUCKETS * 2;
 
-
 /// Negentropy
-pub struct Negentropy<'a, T> {
-    storage: &'a mut T,
+pub struct Negentropy<T> {
+    storage: T,
     frame_size_limit: u64,
-
-    /// If this instance has been used to create an initial message
-    pub is_initiator: bool,
-
+    is_initiator: bool,
     last_timestamp_in: u64,
     last_timestamp_out: u64,
 }
 
-impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
+impl<T> Negentropy<T>
+where
+    T: NegentropyStorageBase,
+{
     /// Create new [`Negentropy`] instance
-    pub fn new(storage: &'a mut T, frame_size_limit: u64) -> Result<Self, Error> {
+    ///
+    /// Frame size limit must be `equal to 0` or `greater than 4096`
+    pub fn new(storage: T, frame_size_limit: u64) -> Result<Self, Error> {
         if frame_size_limit != 0 && frame_size_limit < 4096 {
             return Err(Error::FrameSizeLimitTooSmall);
         }
 
         Ok(Self {
-            storage: storage,
-            frame_size_limit: frame_size_limit,
-
+            storage,
+            frame_size_limit,
             is_initiator: false,
-
             last_timestamp_in: 0,
             last_timestamp_out: 0,
         })
@@ -91,7 +89,12 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
         Ok(Bytes::from(output))
     }
 
-    /// Set Initiator: For resuming initiation flow with a new instance
+    /// Check if this instance has been used to create an initial message
+    pub fn is_initiator(&self) -> bool {
+        self.is_initiator
+    }
+
+    /// Set Initiator: for resuming initiation flow with a new instance
     pub fn set_initiator(&mut self) {
         self.is_initiator = true;
     }
@@ -102,11 +105,7 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
             return Err(Error::Initiator);
         }
 
-        let query: &[u8] = query.as_ref();
-
-        let output = self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())?;
-
-        Ok(output)
+        self.reconcile_aux(query, &mut Vec::new(), &mut Vec::new())
     }
 
     /// Reconcile (client method)
@@ -120,19 +119,17 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
             return Err(Error::NonInitiator);
         }
 
-        let query: &[u8] = query.as_ref();
-
-        let output = self.reconcile_aux(query, have_ids, need_ids)?;
+        let output: Bytes = self.reconcile_aux(query, have_ids, need_ids)?;
         if output.len() == 1 {
             return Ok(None);
         }
 
-        Ok(Some(Bytes::from(output)))
+        Ok(Some(output))
     }
 
     fn reconcile_aux(
         &mut self,
-        mut query: &[u8],
+        query: &Bytes,
         have_ids: &mut Vec<Bytes>,
         need_ids: &mut Vec<Bytes>,
     ) -> Result<Bytes, Error> {
@@ -142,7 +139,13 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
         let mut full_output: Vec<u8> = Vec::new();
         full_output.push(PROTOCOL_VERSION as u8);
 
-        let protocol_version = get_bytes(&mut query, 1)?[0] as u64;
+        let mut query: &[u8] = query.as_ref();
+
+        let protocol_version: u64 = get_bytes(&mut query, 1)?
+            .first()
+            .copied()
+            .map(|b| b as u64)
+            .ok_or(Error::ProtocolVersionNotFound)?;
 
         if !(0x60..=0x6F).contains(&protocol_version) {
             return Err(Error::InvalidProtocolVersion);
@@ -168,15 +171,17 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
             let mode: Mode = self.decode_mode(&mut query)?;
 
             let lower: usize = prev_index;
-            let mut upper: usize = self.storage.find_lower_bound(prev_index, storage_size, &curr_bound);
+            let mut upper: usize =
+                self.storage
+                    .find_lower_bound(prev_index, storage_size, &curr_bound);
 
             match mode {
                 Mode::Skip => {
                     skip = true;
-                },
+                }
                 Mode::Fingerprint => {
                     let their_fingerprint: Vec<u8> = get_bytes(&mut query, FINGERPRINT_SIZE)?;
-                    let our_fingerprint: Vec<u8> = self.storage.fingerprint(lower, upper)?.vec();
+                    let our_fingerprint: Vec<u8> = self.storage.fingerprint(lower, upper)?.to_vec();
 
                     if their_fingerprint != our_fingerprint {
                         // do_skip
@@ -215,7 +220,7 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
                             their_elems.remove(&k);
                         }
 
-                        true
+                        Ok(true)
                     })?;
 
                     if self.is_initiator {
@@ -236,17 +241,20 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
                         let mut num_response_ids: usize = 0;
                         let mut end_bound = curr_bound;
 
-                        self.storage.iterate(lower, upper, &mut |item: Item, index| {
-                            if self.exceeded_frame_size_limit(full_output.len() + response_ids.len()) {
-                                end_bound = Bound::from_item(&item);
-                                upper = index; // shrink upper so that remaining range gets correct fingerprint
-                                return false;
-                            }
+                        self.storage
+                            .iterate(lower, upper, &mut |item: Item, index| {
+                                if self.exceeded_frame_size_limit(
+                                    full_output.len() + response_ids.len(),
+                                ) {
+                                    end_bound = Bound::from_item(&item);
+                                    upper = index; // shrink upper so that remaining range gets correct fingerprint
+                                    return Ok(false);
+                                }
 
-                            response_ids.extend(&item.id);
-                            num_response_ids = num_response_ids + 1;
-                            true
-                        })?;
+                                response_ids.extend(&item.id);
+                                num_response_ids += 1;
+                                Ok(true)
+                            })?;
 
                         o.extend(self.encode_bound(&end_bound));
                         o.extend(self.encode_mode(Mode::IdList));
@@ -265,7 +273,7 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
 
                 full_output.extend(self.encode_bound(&Bound::with_timestamp(MAX_U64)));
                 full_output.extend(self.encode_mode(Mode::Fingerprint));
-                full_output.extend(&remaining_fingerprint.buf);
+                full_output.extend(remaining_fingerprint.iter());
                 break;
             } else {
                 full_output.extend(o);
@@ -294,7 +302,7 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
             o.extend(encode_var_int(num_elems as u64));
             self.storage.iterate(lower, upper, &mut |item: Item, _| {
                 o.extend(&item.id);
-                true
+                Ok(true)
             })?;
         } else {
             let items_per_bucket: usize = num_elems / BUCKETS;
@@ -313,33 +321,32 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
                     let mut prev_item: Item = Item::with_timestamp(0);
                     let mut curr_item: Item = Item::with_timestamp(0);
 
-                    self.storage.iterate(curr - 1, curr + 1, &mut |item: Item, index| {
-                        if index == curr - 1 {
-                            prev_item = item;
-                        } else {
-                            curr_item = item;
-                        }
+                    self.storage
+                        .iterate(curr - 1, curr + 1, &mut |item: Item, index| {
+                            if index == curr - 1 {
+                                prev_item = item;
+                            } else {
+                                curr_item = item;
+                            }
 
-                        true
-                    })?;
+                            Ok(true)
+                        })?;
 
                     self.get_minimal_bound(&prev_item, &curr_item)?
                 };
 
                 o.extend(self.encode_bound(&next_bound));
                 o.extend(self.encode_mode(Mode::Fingerprint));
-                o.extend(our_fingerprint.vec());
+                o.extend(our_fingerprint.iter());
             }
         }
 
         Ok(o)
     }
 
-
     fn exceeded_frame_size_limit(&self, n: usize) -> bool {
         self.frame_size_limit != 0 && n > (self.frame_size_limit as usize) - 200
     }
-
 
     // Decoding
 
@@ -348,10 +355,7 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
         Mode::try_from(mode)
     }
 
-    fn decode_timestamp_in(
-        &mut self,
-        encoded: &mut &[u8],
-    ) -> Result<u64, Error> {
+    fn decode_timestamp_in(&mut self, encoded: &mut &[u8]) -> Result<u64, Error> {
         let timestamp: u64 = decode_var_int(encoded)?;
         let mut timestamp = if timestamp == 0 {
             MAX_U64
@@ -363,19 +367,14 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
         Ok(timestamp)
     }
 
-    fn decode_bound(
-        &mut self,
-        encoded: &mut &[u8],
-    ) -> Result<Bound, Error> {
+    fn decode_bound(&mut self, encoded: &mut &[u8]) -> Result<Bound, Error> {
         let timestamp = self.decode_timestamp_in(encoded)?;
         let len = decode_var_int(encoded)?;
         let id = get_bytes(encoded, len as usize)?;
-        Ok(Bound::with_timestamp_and_id(timestamp, id)?)
+        Bound::with_timestamp_and_id(timestamp, id)
     }
 
-
     // Encoding
-
     fn encode_mode(&self, mode: Mode) -> Vec<u8> {
         encode_var_int(mode.as_u64())
     }
@@ -419,14 +418,17 @@ impl<'a, T: NegentropyStorageBase> Negentropy<'a, T> {
                 }
                 shared_prefix_bytes += 1;
             }
-            Ok(Bound::with_timestamp_and_id(curr.timestamp, &curr_key[..shared_prefix_bytes + 1])?)
+            Ok(Bound::with_timestamp_and_id(
+                curr.timestamp,
+                &curr_key[..shared_prefix_bytes + 1],
+            )?)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use self::storage::{NegentropyStorageVector};
+    use self::storage::NegentropyStorageVector;
     use alloc::vec;
 
     use super::*;
@@ -434,58 +436,65 @@ mod tests {
     #[test]
     fn test_reconciliation_set() {
         // Client
-        let mut storage_client = NegentropyStorageVector::new().unwrap();
+        let mut storage_client = NegentropyStorageVector::new();
         storage_client
             .insert(
                 0,
-                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    .unwrap(),
             )
             .unwrap();
         storage_client
             .insert(
                 1,
-                Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
+                Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                    .unwrap(),
             )
             .unwrap();
         storage_client.seal().unwrap();
 
-        let mut client = Negentropy::new(&mut storage_client, 0).unwrap();
+        let mut client = Negentropy::new(storage_client, 0).unwrap();
         let init_output = client.initiate().unwrap();
 
         // Relay
-        let mut storage_relay = NegentropyStorageVector::new().unwrap();
+        let mut storage_relay = NegentropyStorageVector::new();
         storage_relay
             .insert(
                 0,
-                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 2,
-                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc").unwrap(),
+                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                    .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 3,
-                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111").unwrap(),
+                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+                    .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 5,
-                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222").unwrap(),
+                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+                    .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 10,
-                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333").unwrap(),
+                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+                    .unwrap(),
             )
             .unwrap();
         storage_relay.seal().unwrap();
-        let mut relay = Negentropy::new(&mut storage_relay, 0).unwrap();
+        let mut relay = Negentropy::new(storage_relay, 0).unwrap();
         let reconcile_output = relay.reconcile(&init_output).unwrap();
 
         // Client
@@ -499,7 +508,10 @@ mod tests {
         assert!(reconcile_output_with_ids.is_none());
 
         // Check have IDs
-        assert!(have_ids.contains(&Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap()));
+        assert!(have_ids.contains(
+            &Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                .unwrap()
+        ));
 
         // Check need IDs
         #[cfg(feature = "std")]
@@ -507,17 +519,21 @@ mod tests {
         assert_eq!(
             need_ids,
             vec![
-                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111").unwrap(),
-                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222").unwrap(),
-                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333").unwrap(),
-                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc").unwrap(),
+                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+                    .unwrap(),
+                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+                    .unwrap(),
+                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+                    .unwrap(),
+                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                    .unwrap(),
             ]
         )
     }
 
     #[test]
     fn test_invalid_id_size() {
-        let mut storage_client = NegentropyStorageVector::new().unwrap();
+        let mut storage_client = NegentropyStorageVector::new();
         assert_eq!(
             storage_client
                 .insert(0, Bytes::from_hex("abcdef").unwrap())
@@ -531,7 +547,7 @@ mod tests {
 mod benches {
     use test::{black_box, Bencher};
 
-    use super::storage::{NegentropyStorageVector};
+    use super::storage::NegentropyStorageVector;
     use super::{Bytes, Negentropy};
 
     const ITEMS_LEN: usize = 100_000;
@@ -540,10 +556,15 @@ mod benches {
     pub fn insert(bh: &mut Bencher) {
         let mut storage_client = NegentropyStorageVector::new().unwrap();
         bh.iter(|| {
-            black_box(storage_client.insert(
-                0,
-                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
-            ))
+            black_box(
+                storage_client.insert(
+                    0,
+                    Bytes::from_hex(
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    )
+                    .unwrap(),
+                ),
+            )
             .unwrap();
         });
     }
@@ -558,7 +579,7 @@ mod benches {
                 .unwrap();
         }
         storage_client.seal().unwrap();
-        let mut client = Negentropy::new(&mut storage_client, 0).unwrap();
+        let mut client = Negentropy::new(storage_client, 0).unwrap();
         let init_output = client.initiate().unwrap();
 
         let mut storage_relay = NegentropyStorageVector::new().unwrap();
@@ -571,7 +592,7 @@ mod benches {
                 .unwrap();
         }
         storage_relay.seal().unwrap();
-        let mut relay = Negentropy::new(&mut storage_relay, 0).unwrap();
+        let mut relay = Negentropy::new(storage_relay, 0).unwrap();
         let reconcile_output = relay.reconcile(&init_output).unwrap();
 
         bh.iter(|| {

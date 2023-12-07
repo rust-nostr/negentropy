@@ -1,7 +1,11 @@
-use crate::error;
+// Copyright (c) 2023 Doug Hoyte
+// Copyright (c) 2023 Yuki Kishimoto
+// Distributed under the MIT software license
 
-use self::error::Error;
+use alloc::vec;
+use alloc::vec::Vec;
 
+use crate::error::Error;
 
 pub fn get_bytes(encoded: &mut &[u8], n: usize) -> Result<Vec<u8>, Error> {
     if encoded.len() < n {
@@ -25,7 +29,6 @@ pub fn decode_var_int(encoded: &mut &[u8]) -> Result<u64, Error> {
 
     Ok(res)
 }
-
 
 pub fn encode_var_int(mut n: u64) -> Vec<u8> {
     if n == 0 {

@@ -1,31 +1,19 @@
-use std::convert::TryFrom;
-use std::io::Cursor;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::num::Wrapping;
+// Copyright (c) 2023 Doug Hoyte
+// Copyright (c) 2023 Yuki Kishimoto
+// Distributed under the MIT software license
+
+use alloc::vec::Vec;
 use core::cmp::Ordering;
-use std::convert::TryInto;
+use core::convert::{TryFrom, TryInto};
+use core::num::Wrapping;
+use core::ops::Deref;
 
-use crate::error;
-use crate::encoding;
-use crate::sha256;
-
-pub use self::error::Error;
-pub use self::encoding::{encode_var_int};
-
-
-
-/// Implemented protocol version
-pub const PROTOCOL_VERSION: u64 = 0x61; // Version 1
-/// ID Size
-pub const ID_SIZE: usize = 32;
-/// Fingerprint Size
-pub const FINGERPRINT_SIZE: usize = 16;
-
-
+use crate::encoding::encode_var_int;
+use crate::{sha256, Error, FINGERPRINT_SIZE, ID_SIZE};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Mode {
+pub(crate) enum Mode {
     Skip = 0,
     Fingerprint = 1,
     IdList = 2,
@@ -112,7 +100,6 @@ impl Ord for Item {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Bound
 pub struct Bound {
@@ -177,26 +164,19 @@ impl Ord for Bound {
     }
 }
 
-
 /// Fingerprint
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Fingerprint {
     /// Buffer
-    pub buf: [u8; FINGERPRINT_SIZE],
+    buf: [u8; FINGERPRINT_SIZE],
 }
 
-impl Fingerprint {
-    /// New Fingerprint
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Get as Vec
-    pub fn vec(&self) -> Vec<u8> {
-        self.buf.to_vec()
+impl Deref for Fingerprint {
+    type Target = [u8; FINGERPRINT_SIZE];
+    fn deref(&self) -> &Self::Target {
+        &self.buf
     }
 }
-
 
 /// Accumulator
 #[derive(Debug, Clone, Copy, Default)]
@@ -207,12 +187,10 @@ pub struct Accumulator {
 impl Accumulator {
     /// New Accumulator
     pub fn new() -> Self {
-        Self {
-            buf: [0; ID_SIZE],
-        }
+        Self { buf: [0; ID_SIZE] }
     }
 
-    /// Add Item
+    /* /// Add Item
     pub fn add_item(&mut self, item: &Item) {
         self.add(&item.id);
     }
@@ -220,39 +198,45 @@ impl Accumulator {
     /// Add Accum
     pub fn add_accum(&mut self, accum: &Accumulator) {
         self.add(&accum.buf);
-    }
+    } */
 
     /// Add
-    pub fn add(&mut self, buf: &[u8; ID_SIZE]) -> () {
+    pub fn add(&mut self, buf: &[u8; ID_SIZE]) -> Result<(), Error> {
         let mut curr_carry = Wrapping(0u64);
         let mut next_carry = Wrapping(0u64);
 
-        let mut p = Cursor::new(self.buf);
-        let mut po = Cursor::new(buf);
+        let p = &self.buf[..];
+        let po = buf;
 
-        let mut wtr = vec![];
+        let mut wtr = Vec::with_capacity(ID_SIZE);
 
-        for _i in 0..4 {
-            let orig = Wrapping(p.read_u64::<LittleEndian>().unwrap());
-            let other_v = Wrapping(po.read_u64::<LittleEndian>().unwrap());
+        for _ in 0..4 {
+            let orig = Wrapping(u64::from_le_bytes(p[..8].try_into()?));
+            let other_v = Wrapping(u64::from_le_bytes(po[..8].try_into()?));
 
             let mut next = orig;
 
             next += curr_carry;
-            if next < orig { next_carry = Wrapping(1u64); }
+            if next < orig {
+                next_carry = Wrapping(1u64);
+            }
 
             next += other_v;
-            if next < other_v { next_carry = Wrapping(1u64); }
+            if next < other_v {
+                next_carry = Wrapping(1u64);
+            }
 
-            wtr.write_u64::<LittleEndian>(next.0).unwrap();
+            wtr.extend_from_slice(&next.0.to_le_bytes());
             curr_carry = next_carry;
             next_carry = Wrapping(0u64);
         }
 
-        self.buf[0..ID_SIZE].copy_from_slice(&wtr);
+        self.buf.copy_from_slice(&wtr);
+
+        Ok(())
     }
 
-    /// Negate
+    /* /// Negate
     pub fn negate(&mut self) -> () {
         for i in 0..ID_SIZE {
             self.buf[i] = !self.buf[i];
@@ -279,19 +263,20 @@ impl Accumulator {
         neg.buf = *buf;
         neg.negate();
         self.add_accum(&neg);
-    }
+    } */
 
     /// Compute fingerprint, given set size
-    pub fn get_fingerprint(&self, n: u64) -> Fingerprint {
-        let mut input: Vec<u8> = Vec::new();
+    pub fn get_fingerprint(&self, n: u64) -> Result<Fingerprint, Error> {
+        let var_int: Vec<u8> = encode_var_int(n);
+
+        let mut input: Vec<u8> = Vec::with_capacity(ID_SIZE + var_int.len());
         input.extend(&self.buf);
-        input.extend(encode_var_int(n));
+        input.extend(var_int);
 
-        let hash = sha256::hash(input).to_vec();
+        let hash: [u8; 32] = sha256::hash(input);
 
-        let mut out = Fingerprint::new();
-        out.buf = hash[0..FINGERPRINT_SIZE].try_into().unwrap();
-
-        out
+        Ok(Fingerprint {
+            buf: hash[0..FINGERPRINT_SIZE].try_into()?,
+        })
     }
 }

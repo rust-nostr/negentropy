@@ -1,13 +1,13 @@
-use crate::error;
-use crate::types;
-use crate::bytes;
+// Copyright (c) 2023 Doug Hoyte
+// Copyright (c) 2023 Yuki Kishimoto
+// Distributed under the MIT software license
 
-pub use self::bytes::Bytes;
-pub use self::error::Error;
-pub use self::types::{ID_SIZE, Item, Bound, Accumulator, Fingerprint};
+//! Module that contains the various storage implementations
 
+use alloc::vec::Vec;
 
-
+use crate::types::{Accumulator, Bound, Fingerprint, Item};
+use crate::{Bytes, Error, ID_SIZE};
 
 /// NegentropyStorageBase
 pub trait NegentropyStorageBase {
@@ -15,20 +15,34 @@ pub trait NegentropyStorageBase {
     fn size(&self) -> Result<usize, Error>;
 
     /// Get Item
-    fn get_item(&self, i: usize) -> Result<Item, Error>;
+    fn get_item(&self, i: usize) -> Result<Option<Item>, Error>;
 
     /// Iterate
-    fn iterate(&self, begin: usize, end: usize, cb: &mut dyn FnMut(Item, usize) -> bool) -> Result<(), Error>;
+    fn iterate(
+        &self,
+        begin: usize,
+        end: usize,
+        cb: &mut dyn FnMut(Item, usize) -> Result<bool, Error>,
+    ) -> Result<(), Error>;
 
     /// Find Lower Bound
     fn find_lower_bound(&self, first: usize, last: usize, value: &Bound) -> usize;
 
     /// Fingerprint
-    fn fingerprint(&self, begin: usize, end: usize) -> Result<Fingerprint, Error>;
+    fn fingerprint(&self, begin: usize, end: usize) -> Result<Fingerprint, Error> {
+        let mut out = Accumulator::new();
+
+        self.iterate(begin, end, &mut |item: Item, _| {
+            out.add(&item.id)?;
+            Ok(true)
+        })?;
+
+        out.get_fingerprint((end - begin) as u64)
+    }
 }
 
-/// NegentropyStorageVector
-#[derive(Debug, Clone)]
+/// Negentropy Storage Vector
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NegentropyStorageVector {
     items: Vec<Item>,
     sealed: bool,
@@ -40,17 +54,22 @@ impl NegentropyStorageBase for NegentropyStorageVector {
         Ok(self.items.len())
     }
 
-    fn get_item(&self, i: usize) -> Result<Item, Error> {
+    fn get_item(&self, i: usize) -> Result<Option<Item>, Error> {
         self.check_sealed()?;
-        Ok(self.items[i])
+        Ok(self.items.get(i).copied())
     }
 
-    fn iterate(&self, begin: usize, end: usize, cb: &mut dyn FnMut(Item, usize) -> bool) -> Result<(), Error> {
+    fn iterate(
+        &self,
+        begin: usize,
+        end: usize,
+        cb: &mut dyn FnMut(Item, usize) -> Result<bool, Error>,
+    ) -> Result<(), Error> {
         self.check_sealed()?;
         self.check_bounds(begin, end)?;
 
         for i in begin..end {
-            if !cb(self.items[i], i) {
+            if !cb(self.items[i], i)? {
                 break;
             }
         }
@@ -77,26 +96,12 @@ impl NegentropyStorageBase for NegentropyStorageVector {
 
         first
     }
-
-    fn fingerprint(&self, begin: usize, end: usize) -> Result<Fingerprint, Error> {
-        let mut out = Accumulator::new();
-
-        self.iterate(begin, end, &mut |item: Item, _| {
-            out.add(&item.id);
-            true
-        })?;
-
-        Ok(out.get_fingerprint((end - begin) as u64))
-    }
 }
 
 impl NegentropyStorageVector {
     /// Create new [`NegentropyStorageVector`] instance
-    pub fn new() -> Result<Self, Error> {
-        Ok(Self {
-            items: Vec::new(),
-            sealed: false,
-        })
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Insert item
@@ -110,9 +115,9 @@ impl NegentropyStorageVector {
             return Err(Error::IdSizeNotMatch);
         }
 
-        let elem: Item = Item::with_timestamp_and_id(created_at, &id)?;
-
+        let elem: Item = Item::with_timestamp_and_id(created_at, id)?;
         self.items.push(elem);
+
         Ok(())
     }
 
@@ -137,7 +142,6 @@ impl NegentropyStorageVector {
     /// Unseal
     pub fn unseal(&mut self) -> Result<(), Error> {
         self.sealed = false;
-
         Ok(())
     }
 

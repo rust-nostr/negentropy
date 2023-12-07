@@ -1,7 +1,12 @@
+// Copyright (c) 2023 Doug Hoyte
+// Copyright (c) 2023 Yuki Kishimoto
+// Distributed under the MIT software license
+
+use alloc::string::{String, ToString};
+use core::array::TryFromSliceError;
 use core::fmt;
 
 use crate::hex;
-
 
 /// Error
 #[derive(Debug, PartialEq, Eq)]
@@ -32,6 +37,8 @@ pub enum Error {
     ParseEndsPrematurely,
     /// Duplicate item added
     DuplicateItemAdded,
+    /// Protocol version not found
+    ProtocolVersionNotFound,
     /// Invalid protocol version
     InvalidProtocolVersion,
     /// Unsupported protocol version
@@ -45,6 +52,8 @@ pub enum Error {
     },
     /// Hex error
     Hex(hex::Error),
+    /// Try from slice error
+    TryFromSlice(String),
     /// Bad range
     BadRange,
 }
@@ -68,6 +77,7 @@ impl fmt::Display for Error {
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
             Self::DuplicateItemAdded => write!(f, "duplicate item added"),
+            Self::ProtocolVersionNotFound => write!(f, "protocol version not found"),
             Self::InvalidProtocolVersion => write!(f, "invalid negentropy protocol version byte"),
             Self::UnsupportedProtocolVersion => {
                 write!(f, "server does not support our negentropy protocol version")
@@ -78,6 +88,7 @@ impl fmt::Display for Error {
                 expected, found
             ),
             Self::Hex(e) => write!(f, "Hex: {}", e),
+            Self::TryFromSlice(e) => write!(f, "Try from slice: {}", e),
             Self::BadRange => write!(f, "bad range"),
         }
     }
@@ -86,5 +97,11 @@ impl fmt::Display for Error {
 impl From<hex::Error> for Error {
     fn from(e: hex::Error) -> Self {
         Self::Hex(e)
+    }
+}
+
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::TryFromSlice(e.to_string())
     }
 }

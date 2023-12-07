@@ -1,12 +1,13 @@
+// Copyright (c) 2023 Doug Hoyte
+// Distributed under the MIT software license
+
 // This is a testing harness for compatibility with the negentropy reference
 // implementation's test suite: https://github.com/hoytech/negentropy/tree/master/test
 
-use std::io::BufRead;
-use std::{env, io};
+use std::env;
+use std::io::{self, BufRead};
 
-use negentropy::{Bytes, Negentropy};
-use negentropy::storage::{NegentropyStorageVector};
-
+use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
 
 fn main() {
     let frame_size_limit_env_var = env::var("FRAMESIZELIMIT");
@@ -16,7 +17,7 @@ fn main() {
         0
     };
 
-    let mut storage = NegentropyStorageVector::new().unwrap();
+    let mut storage = NegentropyStorageVector::new();
 
     for line in io::stdin().lock().lines() {
         let line_unwrapped = line.unwrap();
@@ -25,7 +26,9 @@ fn main() {
         if items[0] == "item" {
             let created = items[1].parse::<u64>().unwrap();
             let id = items[2];
-            storage.insert(created, Bytes::from_hex(id).unwrap()).unwrap();
+            storage
+                .insert(created, Bytes::from_hex(id).unwrap())
+                .unwrap();
         } else if items[0] == "seal" {
             storage.seal().unwrap();
             break;
@@ -34,7 +37,7 @@ fn main() {
         }
     }
 
-    let mut ne = Negentropy::new(&mut storage, frame_size_limit as u64).unwrap();
+    let mut ne = Negentropy::new(storage, frame_size_limit as u64).unwrap();
 
     for line in io::stdin().lock().lines() {
         let line_unwrapped = line.unwrap();
@@ -53,7 +56,7 @@ fn main() {
                 q = items[1].to_string();
             }
 
-            if ne.is_initiator {
+            if ne.is_initiator() {
                 let mut have_ids = Vec::new();
                 let mut need_ids = Vec::new();
                 let resp = ne

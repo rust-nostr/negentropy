@@ -3,19 +3,26 @@
 
 use std::time::Instant;
 
-use negentropy::{Bytes, Negentropy};
-use negentropy::storage::{NegentropyStorageVector};
+use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
 
 fn main() {
     let items = relay_set();
 
     // Client
-    let mut storage_client = NegentropyStorageVector::new().unwrap();
+    let mut storage_client = NegentropyStorageVector::new();
     storage_client
-        .insert(0, Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap())
+        .insert(
+            0,
+            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .unwrap(),
+        )
         .unwrap();
     storage_client
-        .insert(1, Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap())
+        .insert(
+            1,
+            Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                .unwrap(),
+        )
         .unwrap();
     storage_client.seal().unwrap();
     let mut client = Negentropy::new(&mut storage_client, 0).unwrap();
@@ -24,7 +31,7 @@ fn main() {
     println!("Client init took {} ms", now.elapsed().as_millis());
 
     // Relay
-    let mut storage_relay = NegentropyStorageVector::new().unwrap();
+    let mut storage_relay = NegentropyStorageVector::new();
     println!("Relay items: {}", items.len());
     for (index, item) in items.into_iter().enumerate() {
         storage_relay

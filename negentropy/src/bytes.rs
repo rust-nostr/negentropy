@@ -1,3 +1,4 @@
+// Copyright (c) 2023 Doug Hoyte
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
@@ -5,11 +6,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-use crate::error;
+use crate::error::Error;
 use crate::hex;
-
-pub use self::error::Error;
-
 
 /// Bytes
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
