@@ -3,12 +3,16 @@
 
 use core::fmt;
 
+use uniffi::Error;
+
 pub type Result<T, E = NegentropyError> = std::result::Result<T, E>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum NegentropyError {
     Generic { err: String },
 }
+
+impl std::error::Error for NegentropyError {}
 
 impl fmt::Display for NegentropyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -2,9 +2,13 @@
 // Distributed under the MIT software license
 
 use core::ops::Deref;
+use std::sync::Arc;
+
+use uniffi::Object;
 
 use crate::error::Result;
 
+#[derive(Object)]
 pub struct Bytes {
     inner: negentropy::Bytes,
 }
@@ -22,17 +26,20 @@ impl From<negentropy::Bytes> for Bytes {
     }
 }
 
+#[uniffi::export]
 impl Bytes {
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self {
+    #[uniffi::constructor]
+    pub fn new(bytes: Vec<u8>) -> Arc<Self> {
+        Arc::new(Self {
             inner: negentropy::Bytes::new(bytes),
-        }
+        })
     }
 
-    pub fn from_hex(data: String) -> Result<Self> {
-        Ok(Self {
+    #[uniffi::constructor]
+    pub fn from_hex(data: String) -> Result<Arc<Self>> {
+        Ok(Arc::new(Self {
             inner: negentropy::Bytes::from_hex(data)?,
-        })
+        }))
     }
 
     pub fn as_hex(&self) -> String {
