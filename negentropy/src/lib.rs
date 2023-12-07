@@ -548,13 +548,11 @@ mod benches {
     use test::{black_box, Bencher};
 
     use super::storage::NegentropyStorageVector;
-    use super::{Bytes, Negentropy};
-
-    const ITEMS_LEN: usize = 100_000;
+    use super::Bytes;
 
     #[bench]
     pub fn insert(bh: &mut Bencher) {
-        let mut storage_client = NegentropyStorageVector::new().unwrap();
+        let mut storage_client = NegentropyStorageVector::new();
         bh.iter(|| {
             black_box(
                 storage_client.insert(
@@ -567,84 +565,5 @@ mod benches {
             )
             .unwrap();
         });
-    }
-
-    #[bench]
-    pub fn final_reconciliation_100_000_items(bh: &mut Bencher) {
-        // Client
-        let mut storage_client = NegentropyStorageVector::new().unwrap();
-        for (index, item) in generate_combinations("abc", 32, 2).into_iter().enumerate() {
-            storage_client
-                .insert(index as u64, Bytes::from_hex(item).unwrap())
-                .unwrap();
-        }
-        storage_client.seal().unwrap();
-        let mut client = Negentropy::new(storage_client, 0).unwrap();
-        let init_output = client.initiate().unwrap();
-
-        let mut storage_relay = NegentropyStorageVector::new().unwrap();
-        for (index, item) in generate_combinations("abc", 32, ITEMS_LEN)
-            .into_iter()
-            .enumerate()
-        {
-            storage_relay
-                .insert(index as u64, Bytes::from_hex(item).unwrap())
-                .unwrap();
-        }
-        storage_relay.seal().unwrap();
-        let mut relay = Negentropy::new(storage_relay, 0).unwrap();
-        let reconcile_output = relay.reconcile(&init_output).unwrap();
-
-        bh.iter(|| {
-            let mut have_ids = Vec::new();
-            let mut need_ids = Vec::new();
-            black_box(client.reconcile_with_ids(&reconcile_output, &mut have_ids, &mut need_ids))
-                .unwrap();
-        });
-    }
-
-    fn generate_combinations(characters: &str, length: usize, max: usize) -> Vec<String> {
-        let mut combinations = Vec::new();
-        let mut current = String::new();
-        generate_combinations_recursive(
-            &mut combinations,
-            &mut current,
-            characters,
-            length,
-            0,
-            max,
-        );
-        combinations
-    }
-
-    fn generate_combinations_recursive(
-        combinations: &mut Vec<String>,
-        current: &mut String,
-        characters: &str,
-        length: usize,
-        index: usize,
-        max: usize,
-    ) {
-        if length == 0 {
-            combinations.push(current.clone());
-            return;
-        }
-
-        for char in characters.chars() {
-            if combinations.len() < max {
-                current.push(char);
-                generate_combinations_recursive(
-                    combinations,
-                    current,
-                    characters,
-                    length - 1,
-                    index + 1,
-                    max,
-                );
-                current.pop();
-            } else {
-                return;
-            }
-        }
     }
 }
