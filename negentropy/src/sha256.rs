@@ -143,7 +143,7 @@ mod benches {
     #[bench]
     pub fn sha256_hash(bh: &mut Bencher) {
         bh.iter(|| {
-            black_box(sha256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+            black_box(hash("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         });
     }
 }

@@ -1,21 +1,23 @@
-from negentropy import Negentropy, Bytes
+from negentropy import Negentropy, NegentropyStorageVector, Bytes
 
 # Client init
-client = Negentropy(16, None)
-client.add_item(0, Bytes.from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-client.add_item(1, Bytes.from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
-client.seal()
+storage = NegentropyStorageVector()
+storage.insert(0, Bytes.from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+storage.insert(1, Bytes.from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
+storage.seal()
+client = Negentropy(storage, None)
 init_output = client.initiate()
 print(f"Initiator Output: {init_output.as_hex()}")
 
 # Relay
-relay = Negentropy(16, None)
-relay.add_item(0, Bytes.from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-relay.add_item(2, Bytes.from_hex("cccccccccccccccccccccccccccccccc"))
-relay.add_item(3, Bytes.from_hex("11111111111111111111111111111111"))
-relay.add_item(5, Bytes.from_hex("22222222222222222222222222222222"))
-relay.add_item(10, Bytes.from_hex("33333333333333333333333333333333"))
-relay.seal()
+storage = NegentropyStorageVector()
+storage.insert(0, Bytes.from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+storage.insert(2, Bytes.from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"))
+storage.insert(3, Bytes.from_hex("1111111111111111111111111111111111111111111111111111111111111111"))
+storage.insert(5, Bytes.from_hex("2222222222222222222222222222222222222222222222222222222222222222"))
+storage.insert(10, Bytes.from_hex("3333333333333333333333333333333333333333333333333333333333333333"))
+storage.seal()
+relay = Negentropy(storage, None)
 reconcile_output = relay.reconcile(init_output)
 print(f"Reconcile Output: {reconcile_output.as_hex()}")
 

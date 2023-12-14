@@ -5,67 +5,61 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use uniffi::{Object, Record};
 
 mod bytes;
 mod error;
+mod storage;
 
 pub use self::bytes::Bytes;
 pub use self::error::NegentropyError;
 use self::error::Result;
+pub use self::storage::NegentropyStorageVector;
 
+#[derive(Record)]
 pub struct ReconcileWithIds {
     pub have_ids: Vec<Arc<Bytes>>,
     pub need_ids: Vec<Arc<Bytes>>,
     pub output: Option<Arc<Bytes>>,
 }
 
+#[derive(Object)]
 pub struct Negentropy {
-    inner: RwLock<negentropy::Negentropy>,
+    inner: RwLock<negentropy::Negentropy<negentropy::NegentropyStorageVector>>,
 }
 
+#[uniffi::export]
 impl Negentropy {
-    pub fn new(id_size: u8, frame_size_limit: Option<u64>) -> Result<Self> {
-        Ok(Self {
+    /// Create new negentropy instance
+    ///
+    /// Frame size limit must be `equal to 0` or `greater than 4096`
+    #[uniffi::constructor]
+    pub fn new(
+        storage: Arc<NegentropyStorageVector>,
+        frame_size_limit: Option<u64>,
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(Self {
             inner: RwLock::new(negentropy::Negentropy::new(
-                id_size as usize,
-                frame_size_limit,
+                storage.as_ref().to_inner(),
+                frame_size_limit.unwrap_or_default(),
             )?),
-        })
-    }
-
-    pub fn id_size(&self) -> u64 {
-        self.inner.read().id_size() as u64
-    }
-
-    /// Check if current instance it's an initiator
-    pub fn is_initiator(&self) -> bool {
-        self.inner.read().is_initiator()
-    }
-
-    /// Check if sealed
-    pub fn is_sealed(&self) -> bool {
-        self.inner.read().is_sealed()
-    }
-
-    /// Check if need to continue
-    pub fn continuation_needed(&self) -> bool {
-        self.inner.read().continuation_needed()
-    }
-
-    pub fn add_item(&self, created_at: u64, id: Arc<Bytes>) -> Result<()> {
-        let mut negentropy = self.inner.write();
-        Ok(negentropy.add_item(created_at, id.as_ref().deref().clone())?)
-    }
-
-    pub fn seal(&self) -> Result<()> {
-        let mut negentropy = self.inner.write();
-        Ok(negentropy.seal()?)
+        }))
     }
 
     /// Initiate reconciliation set
     pub fn initiate(&self) -> Result<Arc<Bytes>> {
         let mut negentropy = self.inner.write();
         Ok(Arc::new(negentropy.initiate()?.into()))
+    }
+
+    pub fn is_initiator(&self) -> bool {
+        self.inner.read().is_initiator()
+    }
+
+    /// Set Initiator: for resuming initiation flow with a new instance
+    pub fn set_initiator(&self) {
+        let mut negentropy = self.inner.write();
+        negentropy.set_initiator();
     }
 
     pub fn reconcile(&self, query: Arc<Bytes>) -> Result<Arc<Bytes>> {
@@ -89,5 +83,4 @@ impl Negentropy {
     }
 }
 
-// UDL
-uniffi::include_scaffolding!("negentropy");
+uniffi::setup_scaffolding!("negentropy");
