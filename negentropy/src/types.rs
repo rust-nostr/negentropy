@@ -211,8 +211,8 @@ impl Accumulator {
         let mut wtr = Vec::with_capacity(ID_SIZE);
 
         for i in 0..4 {
-            let orig = Wrapping(u64::from_le_bytes(p[(i*8)..(i*8 + 8)].try_into()?));
-            let other_v = Wrapping(u64::from_le_bytes(po[(i*8)..(i*8 + 8)].try_into()?));
+            let orig = Wrapping(u64::from_le_bytes(p[(i * 8)..(i * 8 + 8)].try_into()?));
+            let other_v = Wrapping(u64::from_le_bytes(po[(i * 8)..(i * 8 + 8)].try_into()?));
 
             let mut next = orig;
 
