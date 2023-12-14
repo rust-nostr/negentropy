@@ -1,5 +1,7 @@
 {
     "rust-analyzer.linkedProjects": [
+        "./negentropy/fuzz/harness/Cargo.toml",
+        "./negentropy/fuzz/perf/Cargo.toml",
         "./negentropy-ffi/Cargo.toml"
     ]
 }
