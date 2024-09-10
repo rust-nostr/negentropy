@@ -9,7 +9,7 @@ use core::num::Wrapping;
 use core::ops::Deref;
 
 use crate::encoding::encode_var_int;
-use crate::{sha256, Error, FINGERPRINT_SIZE, ID_SIZE};
+use crate::{sha256, Error, Id, FINGERPRINT_SIZE, ID_SIZE};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -42,46 +42,8 @@ impl TryFrom<u64> for Mode {
 pub struct Item {
     /// timestamp
     pub timestamp: u64,
-    /// id
-    pub id: [u8; ID_SIZE],
-}
-
-impl Item {
-    /// new Item
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// new Item with just timestamp, id is 0s
-    pub fn with_timestamp(timestamp: u64) -> Self {
-        let mut item = Self::new();
-        item.timestamp = timestamp;
-        item
-    }
-
-    /// new Item with timestamp and id
-    pub fn with_timestamp_and_id<T>(timestamp: u64, id: T) -> Result<Self, Error>
-    where
-        T: AsRef<[u8]>,
-    {
-        let id: &[u8] = id.as_ref();
-        let len: usize = id.len();
-
-        if len != ID_SIZE {
-            return Err(Error::InvalidIdSize);
-        }
-
-        let mut item = Self::new();
-        item.timestamp = timestamp;
-        item.id[..len].copy_from_slice(id);
-
-        Ok(item)
-    }
-
-    /// get id
-    pub fn get_id(&self) -> &[u8] {
-        &self.id
-    }
+    /// Id
+    pub id: Id,
 }
 
 impl PartialOrd for Item {
@@ -100,6 +62,31 @@ impl Ord for Item {
     }
 }
 
+impl Item {
+    /// new Item
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// new Item with just timestamp, id is 0s
+    pub fn with_timestamp(timestamp: u64) -> Self {
+        let mut item = Self::new();
+        item.timestamp = timestamp;
+        item
+    }
+
+    /// new Item with timestamp and id
+    #[inline]
+    pub fn with_timestamp_and_id(timestamp: u64, id: Id) -> Self {
+        Self { timestamp, id }
+    }
+
+    /// get id
+    pub fn get_id(&self) -> &Id {
+        &self.id
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Bound
 pub struct Bound {
@@ -110,7 +97,8 @@ pub struct Bound {
 }
 
 impl Bound {
-    /// new Bound
+    /// New Bound
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
@@ -131,7 +119,7 @@ impl Bound {
         bound
     }
 
-    /// new Bound from timestamp and id
+    /// New Bound from timestamp and id
     pub fn with_timestamp_and_id<T>(timestamp: u64, id: T) -> Result<Self, Error>
     where
         T: AsRef<[u8]>,
@@ -175,6 +163,13 @@ impl Deref for Fingerprint {
     type Target = [u8; FINGERPRINT_SIZE];
     fn deref(&self) -> &Self::Target {
         &self.buf
+    }
+}
+
+impl Fingerprint {
+    #[inline]
+    pub fn to_bytes(self) -> [u8; FINGERPRINT_SIZE] {
+        self.buf
     }
 }
 

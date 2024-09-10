@@ -7,7 +7,7 @@
 use alloc::vec::Vec;
 
 use crate::types::{Accumulator, Bound, Fingerprint, Item};
-use crate::{Bytes, Error, ID_SIZE};
+use crate::{Error, Id};
 
 /// NegentropyStorageBase
 pub trait NegentropyStorageBase {
@@ -105,17 +105,12 @@ impl NegentropyStorageVector {
     }
 
     /// Insert item
-    pub fn insert(&mut self, created_at: u64, id: Bytes) -> Result<(), Error> {
+    pub fn insert(&mut self, created_at: u64, id: Id) -> Result<(), Error> {
         if self.sealed {
             return Err(Error::AlreadySealed);
         }
 
-        let id: &[u8] = id.as_ref();
-        if id.len() != ID_SIZE {
-            return Err(Error::IdSizeNotMatch);
-        }
-
-        let elem: Item = Item::with_timestamp_and_id(created_at, id)?;
+        let elem: Item = Item::with_timestamp_and_id(created_at, id);
         self.items.push(elem);
 
         Ok(())

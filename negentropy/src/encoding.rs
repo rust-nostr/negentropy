@@ -4,14 +4,20 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
+use core::convert::TryInto;
 
 use crate::error::Error;
 
-pub fn get_bytes(encoded: &mut &[u8], n: usize) -> Result<Vec<u8>, Error> {
+#[inline]
+pub fn get_byte_array<const N: usize>(encoded: &mut &[u8]) -> Result<[u8; N], Error> {
+    Ok(get_bytes(encoded, N)?.try_into()?)
+}
+
+pub fn get_bytes<'a>(encoded: &'a mut &[u8], n: usize) -> Result<&'a [u8], Error> {
     if encoded.len() < n {
         return Err(Error::ParseEndsPrematurely);
     }
-    let res: Vec<u8> = encoded.get(..n).unwrap_or_default().to_vec();
+    let res: &[u8] = &encoded[..n];
     *encoded = encoded.get(n..).unwrap_or_default();
     Ok(res)
 }

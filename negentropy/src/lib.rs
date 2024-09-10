@@ -28,14 +28,16 @@ mod constants;
 mod encoding;
 mod error;
 mod hex;
+mod id;
 mod sha256;
 mod storage;
 mod types;
 
 pub use self::bytes::Bytes;
 pub use self::constants::{FINGERPRINT_SIZE, ID_SIZE, PROTOCOL_VERSION};
-use self::encoding::{decode_var_int, encode_var_int, get_bytes};
+use self::encoding::{decode_var_int, encode_var_int, get_byte_array, get_bytes};
 pub use self::error::Error;
+pub use self::id::Id;
 pub use self::storage::{NegentropyStorageBase, NegentropyStorageVector};
 use self::types::Mode;
 pub use self::types::{Bound, Item};
@@ -112,8 +114,8 @@ where
     pub fn reconcile_with_ids(
         &mut self,
         query: &Bytes,
-        have_ids: &mut Vec<Bytes>,
-        need_ids: &mut Vec<Bytes>,
+        have_ids: &mut Vec<Id>,
+        need_ids: &mut Vec<Id>,
     ) -> Result<Option<Bytes>, Error> {
         if !self.is_initiator {
             return Err(Error::NonInitiator);
@@ -130,18 +132,18 @@ where
     fn reconcile_aux(
         &mut self,
         query: &Bytes,
-        have_ids: &mut Vec<Bytes>,
-        need_ids: &mut Vec<Bytes>,
+        have_ids: &mut Vec<Id>,
+        need_ids: &mut Vec<Id>,
     ) -> Result<Bytes, Error> {
         self.last_timestamp_in = 0;
         self.last_timestamp_out = 0;
 
-        let mut full_output: Vec<u8> = Vec::new();
+        let mut full_output: Vec<u8> = Vec::with_capacity(1);
         full_output.push(PROTOCOL_VERSION as u8);
 
         let mut query: &[u8] = query.as_ref();
 
-        let protocol_version: u64 = get_bytes(&mut query, 1)?
+        let protocol_version: u64 = get_byte_array::<1>(&mut query)?
             .first()
             .copied()
             .map(|b| b as u64)
@@ -180,8 +182,9 @@ where
                     skip = true;
                 }
                 Mode::Fingerprint => {
-                    let their_fingerprint: Vec<u8> = get_bytes(&mut query, FINGERPRINT_SIZE)?;
-                    let our_fingerprint: Vec<u8> = self.storage.fingerprint(lower, upper)?.to_vec();
+                    let their_fingerprint: [u8; FINGERPRINT_SIZE] = get_byte_array(&mut query)?;
+                    let our_fingerprint: [u8; FINGERPRINT_SIZE] =
+                        self.storage.fingerprint(lower, upper)?.to_bytes();
 
                     if their_fingerprint != our_fingerprint {
                         // do_skip
@@ -200,21 +203,20 @@ where
                     let num_ids: u64 = decode_var_int(&mut query)?;
 
                     #[cfg(feature = "std")]
-                    let mut their_elems: HashSet<Vec<u8>> =
-                        HashSet::with_capacity(num_ids as usize);
+                    let mut their_elems: HashSet<Id> = HashSet::with_capacity(num_ids as usize);
                     #[cfg(not(feature = "std"))]
-                    let mut their_elems: BTreeSet<Vec<u8>> = BTreeSet::new();
+                    let mut their_elems: BTreeSet<Id> = BTreeSet::new();
 
                     for _ in 0..num_ids {
-                        let e: Vec<u8> = get_bytes(&mut query, ID_SIZE)?;
-                        their_elems.insert(e);
+                        let e: [u8; ID_SIZE] = get_byte_array(&mut query)?;
+                        their_elems.insert(Id::new(e));
                     }
 
                     self.storage.iterate(lower, upper, &mut |item: Item, _| {
-                        let k = item.id.to_vec();
+                        let k: Id = item.id;
                         if !their_elems.contains(&k) {
                             if self.is_initiator {
-                                have_ids.push(Bytes::from(k));
+                                have_ids.push(k);
                             }
                         } else {
                             their_elems.remove(&k);
@@ -227,7 +229,7 @@ where
                         skip = true;
 
                         for k in their_elems.into_iter() {
-                            need_ids.push(Bytes::from(k));
+                            need_ids.push(k);
                         }
                     } else {
                         // do_skip
@@ -251,7 +253,7 @@ where
                                     return Ok(false);
                                 }
 
-                                response_ids.extend(&item.id);
+                                response_ids.extend(item.id.iter());
                                 num_response_ids += 1;
                                 Ok(true)
                             })?;
@@ -301,7 +303,7 @@ where
 
             o.extend(encode_var_int(num_elems as u64));
             self.storage.iterate(lower, upper, &mut |item: Item, _| {
-                o.extend(&item.id);
+                o.extend(item.id.iter());
                 Ok(true)
             })?;
         } else {
@@ -369,8 +371,8 @@ where
 
     fn decode_bound(&mut self, encoded: &mut &[u8]) -> Result<Bound, Error> {
         let timestamp = self.decode_timestamp_in(encoded)?;
-        let len = decode_var_int(encoded)?;
-        let id = get_bytes(encoded, len as usize)?;
+        let len: usize = decode_var_int(encoded)? as usize;
+        let id: &[u8] = get_bytes(encoded, len)?;
         Bound::with_timestamp_and_id(timestamp, id)
     }
 
@@ -428,9 +430,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use self::storage::NegentropyStorageVector;
     use alloc::vec;
 
+    use self::storage::NegentropyStorageVector;
     use super::*;
 
     #[test]
@@ -440,14 +442,14 @@ mod tests {
         storage_client
             .insert(
                 0,
-                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
                     .unwrap(),
             )
             .unwrap();
         storage_client
             .insert(
                 1,
-                Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
                     .unwrap(),
             )
             .unwrap();
@@ -461,35 +463,35 @@ mod tests {
         storage_relay
             .insert(
                 0,
-                Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
                     .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 2,
-                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                Id::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
                     .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 3,
-                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+                Id::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
                     .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 5,
-                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+                Id::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
                     .unwrap(),
             )
             .unwrap();
         storage_relay
             .insert(
                 10,
-                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+                Id::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
                     .unwrap(),
             )
             .unwrap();
@@ -509,7 +511,7 @@ mod tests {
 
         // Check have IDs
         assert!(have_ids.contains(
-            &Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            &Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
                 .unwrap()
         ));
 
@@ -519,27 +521,16 @@ mod tests {
         assert_eq!(
             need_ids,
             vec![
-                Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+                Id::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
                     .unwrap(),
-                Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+                Id::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
                     .unwrap(),
-                Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+                Id::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
                     .unwrap(),
-                Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                Id::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
                     .unwrap(),
             ]
         )
-    }
-
-    #[test]
-    fn test_invalid_id_size() {
-        let mut storage_client = NegentropyStorageVector::new();
-        assert_eq!(
-            storage_client
-                .insert(0, Bytes::from_hex("abcdef").unwrap())
-                .unwrap_err(),
-            Error::IdSizeNotMatch
-        );
     }
 }
 

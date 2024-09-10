@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
+use negentropy::{Id, Negentropy, NegentropyStorageVector};
 
 fn main() {
     // Client
@@ -9,63 +9,63 @@ fn main() {
     storage_client
         .insert(
             0,
-            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
                 .unwrap(),
         )
         .unwrap();
     storage_client
         .insert(
             1,
-            Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
                 .unwrap(),
         )
         .unwrap();
     storage_client.seal().unwrap();
     let mut client = Negentropy::new(storage_client, 0).unwrap();
     let init_output = client.initiate().unwrap();
-    println!("Initiator Output: {}", init_output.as_hex());
+    println!("Initiator Output: {}", init_output.clone().to_hex());
 
     // Relay
     let mut storage_relay = NegentropyStorageVector::new();
     storage_relay
         .insert(
             0,
-            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
                 .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             2,
-            Bytes::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+            Id::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
                 .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             3,
-            Bytes::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
+            Id::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
                 .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             5,
-            Bytes::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
+            Id::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
                 .unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             10,
-            Bytes::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
+            Id::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
                 .unwrap(),
         )
         .unwrap();
     storage_relay.seal().unwrap();
     let mut relay = Negentropy::new(storage_relay, 0).unwrap();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
-    println!("Reconcile Output: {}", reconcile_output.as_hex());
+    println!("Reconcile Output: {}", reconcile_output.clone().to_hex());
 
     // Client
     let mut have_ids = Vec::new();

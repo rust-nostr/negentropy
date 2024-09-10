@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
+use negentropy::{Id, Negentropy, NegentropyStorageVector};
 
 fn main() {
     let items = relay_set();
@@ -13,14 +13,14 @@ fn main() {
     storage_client
         .insert(
             0,
-            Bytes::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
                 .unwrap(),
         )
         .unwrap();
     storage_client
         .insert(
             1,
-            Bytes::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
                 .unwrap(),
         )
         .unwrap();
@@ -35,7 +35,7 @@ fn main() {
     println!("Relay items: {}", items.len());
     for (index, item) in items.into_iter().enumerate() {
         storage_relay
-            .insert(index as u64, Bytes::from_hex(item).unwrap())
+            .insert(index as u64, Id::from_hex(item).unwrap())
             .unwrap();
     }
     storage_relay.seal().unwrap();

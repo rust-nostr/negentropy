@@ -7,7 +7,7 @@
 use std::env;
 use std::io::{self, BufRead};
 
-use negentropy::{Bytes, Negentropy, NegentropyStorageVector};
+use negentropy::{Bytes, Id, Negentropy, NegentropyStorageVector};
 
 fn main() {
     let frame_size_limit_env_var = env::var("FRAMESIZELIMIT");
@@ -26,9 +26,7 @@ fn main() {
         if items[0] == "item" {
             let created = items[1].parse::<u64>().unwrap();
             let id = items[2];
-            storage
-                .insert(created, Bytes::from_hex(id).unwrap())
-                .unwrap();
+            storage.insert(created, Id::from_hex(id).unwrap()).unwrap();
         } else if items[0] == "seal" {
             storage.seal().unwrap();
             break;
@@ -48,7 +46,7 @@ fn main() {
             if frame_size_limit > 0 && q.len() / 2 > frame_size_limit {
                 panic!("frame_size_limit exceeded");
             }
-            println!("msg,{}", q.as_hex());
+            println!("msg,{}", q.to_hex());
         } else if items[0] == "msg" {
             let mut q = String::new();
 
