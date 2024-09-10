@@ -42,8 +42,8 @@ impl Bytes {
         }))
     }
 
-    pub fn as_hex(&self) -> String {
-        self.inner.as_hex()
+    pub fn to_hex(&self) -> String {
+        self.inner.clone().to_hex()
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {

@@ -22,6 +22,7 @@ impl Deref for Bytes {
 
 impl Bytes {
     /// Construct from bytes
+    #[inline]
     pub fn new<T>(bytes: T) -> Self
     where
         T: AsRef<[u8]>,
@@ -30,11 +31,13 @@ impl Bytes {
     }
 
     /// Construct from slice
+    #[inline]
     pub fn from_slice(slice: &[u8]) -> Self {
         Self::from(slice)
     }
 
     /// Construct from hex
+    #[inline]
     pub fn from_hex<T>(data: T) -> Result<Self, Error>
     where
         T: AsRef<[u8]>,
@@ -44,21 +47,19 @@ impl Bytes {
     }
 
     /// Consume the [`Bytes`] struct and return a hex-encoded string
+    #[inline]
     pub fn to_hex(self) -> String {
         hex::encode(self.0)
     }
 
-    /// Clone the bytes and return a hex-encoded string
-    pub fn as_hex(&self) -> String {
-        hex::encode(self.0.clone())
-    }
-
     /// Return the inner value
+    #[inline]
     pub fn to_bytes(self) -> Vec<u8> {
         self.0
     }
 
     /// Return reference to the inner value
+    #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
