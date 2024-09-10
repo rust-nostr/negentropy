@@ -1,7 +1,6 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use negentropy::NegentropyStorageBase;
@@ -9,7 +8,7 @@ use parking_lot::RwLock;
 use uniffi::Object;
 
 use crate::error::Result;
-use crate::Bytes;
+use crate::id::Id;
 
 #[derive(Object)]
 pub struct NegentropyStorageVector {
@@ -26,9 +25,9 @@ impl NegentropyStorageVector {
     }
 
     /// Insert item
-    pub fn insert(&self, created_at: u64, id: Arc<Bytes>) -> Result<()> {
+    pub fn insert(&self, created_at: u64, id: &Id) -> Result<()> {
         let mut storage = self.inner.write();
-        Ok(storage.insert(created_at, id.as_ref().deref().clone())?)
+        Ok(storage.insert(created_at, **id)?)
     }
 
     /// Seal

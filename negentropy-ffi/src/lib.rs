@@ -9,17 +9,19 @@ use uniffi::{Object, Record};
 
 mod bytes;
 mod error;
+mod id;
 mod storage;
 
 pub use self::bytes::Bytes;
 pub use self::error::NegentropyError;
 use self::error::Result;
 pub use self::storage::NegentropyStorageVector;
+use crate::id::Id;
 
 #[derive(Record)]
 pub struct ReconcileWithIds {
-    pub have_ids: Vec<Arc<Bytes>>,
-    pub need_ids: Vec<Arc<Bytes>>,
+    pub have_ids: Vec<Arc<Id>>,
+    pub need_ids: Vec<Arc<Id>>,
     pub output: Option<Arc<Bytes>>,
 }
 
@@ -62,19 +64,17 @@ impl Negentropy {
         negentropy.set_initiator();
     }
 
-    pub fn reconcile(&self, query: Arc<Bytes>) -> Result<Arc<Bytes>> {
+    pub fn reconcile(&self, query: &Bytes) -> Result<Arc<Bytes>> {
         let mut negentropy = self.inner.write();
-        Ok(Arc::new(
-            negentropy.reconcile(query.as_ref().deref())?.into(),
-        ))
+        Ok(Arc::new(negentropy.reconcile(query.deref())?.into()))
     }
 
-    pub fn reconcile_with_ids(&self, query: Arc<Bytes>) -> Result<ReconcileWithIds> {
+    pub fn reconcile_with_ids(&self, query: &Bytes) -> Result<ReconcileWithIds> {
         let mut negentropy = self.inner.write();
-        let mut have_ids: Vec<negentropy::Bytes> = Vec::new();
-        let mut need_ids: Vec<negentropy::Bytes> = Vec::new();
+        let mut have_ids = Vec::new();
+        let mut need_ids = Vec::new();
         let output: Option<negentropy::Bytes> =
-            negentropy.reconcile_with_ids(query.as_ref().deref(), &mut have_ids, &mut need_ids)?;
+            negentropy.reconcile_with_ids(query.deref(), &mut have_ids, &mut need_ids)?;
         Ok(ReconcileWithIds {
             have_ids: have_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
             need_ids: need_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
