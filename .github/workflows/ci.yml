@@ -27,7 +27,7 @@ jobs:
       matrix:
         rust:
           - version: stable # STABLE
-          - version: 1.48.0 # MSRV
+          - version: 1.51.0 # MSRV
         build-args:
           [
             "",
@@ -58,7 +58,7 @@ jobs:
       if: ${{ matrix.build-args != '--target wasm32-unknown-unknown' }}
       run: cargo test ${{ matrix.build-args }}
     - name: Clippy
-      if: ${{ matrix.rust.version != '1.48.0' }}
+      if: ${{ matrix.rust.version != '1.51.0' }}
       run: cargo clippy ${{ matrix.build-args }} -- -D warnings
 
   build-ffi:
@@ -92,4 +92,3 @@ jobs:
       run: cargo test
     - name: Clippy
       run: cargo clippy -- -D warnings
-  
