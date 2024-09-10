@@ -13,5 +13,8 @@ exclude = ["fuzz"]
 default = ["std"]
 std = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(bench)'] }
+
 [[example]]
 name = "negentropy"
