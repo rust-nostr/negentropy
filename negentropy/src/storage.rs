@@ -99,9 +99,19 @@ impl NegentropyStorageBase for NegentropyStorageVector {
 }
 
 impl NegentropyStorageVector {
-    /// Create new [`NegentropyStorageVector`] instance
+    /// Create new storage
+    #[inline]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create new storage with capacity
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            items: Vec::with_capacity(capacity),
+            sealed: false,
+        }
     }
 
     /// Insert item
