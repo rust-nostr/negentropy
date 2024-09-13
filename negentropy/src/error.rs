@@ -15,8 +15,6 @@ pub enum Error {
     IdTooBig,
     /// Invalid ID size
     InvalidIdSize,
-    /// IdSizeNotMatch
-    IdSizeNotMatch,
     /// Frame size limit too small
     FrameSizeLimitTooSmall,
     /// Not sealed
@@ -29,8 +27,6 @@ pub enum Error {
     Initiator,
     /// Non-initiator error
     NonInitiator,
-    /// Initiate after reconcile
-    InitiateAfterReconcile,
     /// Unexpected mode
     UnexpectedMode(u64),
     /// Parse ends prematurely
@@ -41,13 +37,6 @@ pub enum Error {
     InvalidProtocolVersion,
     /// Unsupported protocol version
     UnsupportedProtocolVersion,
-    /// Unexpected output
-    UnexpectedOutput {
-        /// Expected output
-        expected: String,
-        /// Found output
-        found: String,
-    },
     /// Hex error
     Hex(hex::Error),
     /// Try from slice error
@@ -64,14 +53,12 @@ impl fmt::Display for Error {
         match self {
             Self::IdTooBig => write!(f, "ID too big"),
             Self::InvalidIdSize => write!(f, "Invalid ID size"),
-            Self::IdSizeNotMatch => write!(f, "Current item ID not match the client ID size"),
             Self::FrameSizeLimitTooSmall => write!(f, "Frame size limit too small"),
             Self::NotSealed => write!(f, "Not sealed"),
             Self::AlreadySealed => write!(f, "Already sealed"),
             Self::AlreadyBuiltInitialMessage => write!(f, "Already built initial message"),
             Self::Initiator => write!(f, "initiator not asking for have/need IDs"),
             Self::NonInitiator => write!(f, "non-initiator asking for have/need IDs"),
-            Self::InitiateAfterReconcile => write!(f, "can't initiate after reconcile"),
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
             Self::ProtocolVersionNotFound => write!(f, "protocol version not found"),
@@ -79,11 +66,6 @@ impl fmt::Display for Error {
             Self::UnsupportedProtocolVersion => {
                 write!(f, "server does not support our negentropy protocol version")
             }
-            Self::UnexpectedOutput { expected, found } => write!(
-                f,
-                "Unexpected output: expected={}, found={}",
-                expected, found
-            ),
             Self::Hex(e) => write!(f, "Hex: {}", e),
             Self::TryFromSlice(e) => write!(f, "Try from slice: {}", e),
             Self::BadRange => write!(f, "bad range"),
