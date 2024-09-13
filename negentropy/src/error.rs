@@ -35,8 +35,6 @@ pub enum Error {
     UnexpectedMode(u64),
     /// Parse ends prematurely
     ParseEndsPrematurely,
-    /// Duplicate item added
-    DuplicateItemAdded,
     /// Protocol version not found
     ProtocolVersionNotFound,
     /// Invalid protocol version
@@ -76,7 +74,6 @@ impl fmt::Display for Error {
             Self::InitiateAfterReconcile => write!(f, "can't initiate after reconcile"),
             Self::UnexpectedMode(m) => write!(f, "Unexpected mode: {}", m),
             Self::ParseEndsPrematurely => write!(f, "parse ends prematurely"),
-            Self::DuplicateItemAdded => write!(f, "duplicate item added"),
             Self::ProtocolVersionNotFound => write!(f, "protocol version not found"),
             Self::InvalidProtocolVersion => write!(f, "invalid negentropy protocol version byte"),
             Self::UnsupportedProtocolVersion => {

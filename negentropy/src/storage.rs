@@ -124,12 +124,7 @@ impl NegentropyStorageVector {
         self.sealed = true;
 
         self.items.sort();
-
-        for i in 1..self.items.len() {
-            if self.items[i - 1] == self.items[i] {
-                return Err(Error::DuplicateItemAdded);
-            }
-        }
+        self.items.dedup();
 
         Ok(())
     }
