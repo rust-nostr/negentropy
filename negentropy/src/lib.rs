@@ -539,7 +539,7 @@ mod benches {
     use test::{black_box, Bencher};
 
     use super::storage::NegentropyStorageVector;
-    use super::Bytes;
+    use super::Id;
 
     #[bench]
     pub fn insert(bh: &mut Bencher) {
@@ -548,7 +548,7 @@ mod benches {
             black_box(
                 storage_client.insert(
                     0,
-                    Bytes::from_hex(
+                    Id::from_hex(
                         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     )
                     .unwrap(),
