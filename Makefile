@@ -12,7 +12,8 @@ bench:
 	RUSTFLAGS='--cfg=bench' cargo +nightly bench -p negentropy
 
 graph:
-	CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --release -p perf -o flamegraph.svg
+	@cargo flamegraph --version || cargo install flamegraph
+	CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph -p perf -o flamegraph.svg
 
 clean:
 	cargo clean
