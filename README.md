@@ -8,8 +8,8 @@ Implementation of the [negentropy](https://github.com/hoytech/negentropy) set-re
 
 The project is split up into many crates:
 
-* [**negentropy**](./negentropy/): Rust implementation of the negentropy set-reconciliation protocol
-* [**negentropy-ffi**](./negentropy-ffi/): UniFFI bindings (Swift, Kotlin and Python) of the [negentropy](./negentropy/) crate
+* [**negentropy**](negentropy): Rust implementation of the negentropy set-reconciliation protocol
+* [**negentropy-ffi**](negentropy-ffi): UniFFI bindings (Swift, Kotlin and Python) of the [negentropy](negentropy) crate
 
 ## Flame Graph and perf
 
@@ -31,12 +31,10 @@ Client reconcile took 39 ms
 
 To run the benchmarks use: `make bench`
 
+## Donations
+
+`rust-nostr` is free and open-source. This means we do not earn any revenue by selling it. Instead, we rely on your financial support. If you actively use any of the `rust-nostr` libs/software/services, then please [donate](https://rust-nostr.org/donate).
+
 ## License
 
 This project is distributed under the MIT software license - see the [LICENSE](LICENSE) file for details
-
-## Donations
-
-⚡ Tips: <https://getalby.com/p/yuki>
-
-⚡ Lightning Address: yuki@getalby.com
