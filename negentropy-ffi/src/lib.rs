@@ -1,6 +1,8 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
+#![allow(clippy::new_without_default)]
+
 use std::sync::{Arc, Mutex};
 
 use uniffi::{Object, Record};
@@ -32,13 +34,10 @@ impl Negentropy {
     ///
     /// Frame size limit must be `equal to 0` or `greater than 4096`
     #[uniffi::constructor]
-    pub fn new(
-        storage: Arc<NegentropyStorageVector>,
-        frame_size_limit: Option<u64>,
-    ) -> Result<Self> {
+    pub fn new(storage: &NegentropyStorageVector, frame_size_limit: Option<u64>) -> Result<Self> {
         Ok(Self {
             inner: Mutex::new(negentropy::Negentropy::new(
-                storage.as_ref().to_inner()?,
+                storage.to_inner()?,
                 frame_size_limit.unwrap_or_default(),
             )?),
         })
@@ -55,18 +54,20 @@ impl Negentropy {
         Ok(negentropy.is_initiator())
     }
 
-    /// Set Initiator: for resuming initiation flow with a new instance
+    /// Set initiator: for resuming initiation flow with a new instance
     pub fn set_initiator(&self) -> Result<()> {
         let mut negentropy = self.inner.lock()?;
         negentropy.set_initiator();
         Ok(())
     }
 
+    /// Reconcile (server method)
     pub fn reconcile(&self, query: &[u8]) -> Result<Vec<u8>> {
         let mut negentropy = self.inner.lock()?;
         Ok(negentropy.reconcile(query)?)
     }
 
+    /// Reconcile (client method)
     pub fn reconcile_with_ids(&self, query: &[u8]) -> Result<ReconcileWithIds> {
         let mut negentropy = self.inner.lock()?;
         let mut have_ids = Vec::new();

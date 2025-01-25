@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use negentropy::NegentropyStorageBase;
 use uniffi::Object;
@@ -11,16 +11,16 @@ use crate::id::Id;
 
 #[derive(Object)]
 pub struct NegentropyStorageVector {
-    inner: Arc<Mutex<negentropy::NegentropyStorageVector>>,
+    inner: Mutex<negentropy::NegentropyStorageVector>,
 }
 
 #[uniffi::export]
 impl NegentropyStorageVector {
     #[uniffi::constructor]
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            inner: Arc::new(Mutex::new(negentropy::NegentropyStorageVector::new())),
-        })
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(negentropy::NegentropyStorageVector::new()),
+        }
     }
 
     /// Insert item
