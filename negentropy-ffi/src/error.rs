@@ -1,7 +1,8 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use core::fmt;
+use std::fmt;
+use std::sync::PoisonError;
 
 use uniffi::Error;
 
@@ -19,6 +20,12 @@ impl fmt::Display for NegentropyError {
         match self {
             Self::Generic { err } => write!(f, "{err}"),
         }
+    }
+}
+
+impl<T> From<PoisonError<T>> for NegentropyError {
+    fn from(e: PoisonError<T>) -> Self {
+        Self::Generic { err: e.to_string() }
     }
 }
 

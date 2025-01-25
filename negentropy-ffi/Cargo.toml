@@ -19,7 +19,6 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 negentropy  = { path = "../negentropy" }
-parking_lot = "0.12"
 uniffi = { version = "0.28", features = ["cli"] }
 
 [build-dependencies]

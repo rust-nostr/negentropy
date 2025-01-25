@@ -1,9 +1,8 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use parking_lot::RwLock;
 use uniffi::{Object, Record};
 
 mod error;
@@ -24,7 +23,7 @@ pub struct ReconcileWithIds {
 
 #[derive(Object)]
 pub struct Negentropy {
-    inner: RwLock<negentropy::Negentropy<negentropy::NegentropyStorageVector>>,
+    inner: Mutex<negentropy::Negentropy<negentropy::NegentropyStorageVector>>,
 }
 
 #[uniffi::export]
@@ -36,38 +35,40 @@ impl Negentropy {
     pub fn new(
         storage: Arc<NegentropyStorageVector>,
         frame_size_limit: Option<u64>,
-    ) -> Result<Arc<Self>> {
-        Ok(Arc::new(Self {
-            inner: RwLock::new(negentropy::Negentropy::new(
-                storage.as_ref().to_inner(),
+    ) -> Result<Self> {
+        Ok(Self {
+            inner: Mutex::new(negentropy::Negentropy::new(
+                storage.as_ref().to_inner()?,
                 frame_size_limit.unwrap_or_default(),
             )?),
-        }))
+        })
     }
 
     /// Initiate reconciliation set
     pub fn initiate(&self) -> Result<Vec<u8>> {
-        let mut negentropy = self.inner.write();
+        let mut negentropy = self.inner.lock()?;
         Ok(negentropy.initiate()?)
     }
 
-    pub fn is_initiator(&self) -> bool {
-        self.inner.read().is_initiator()
+    pub fn is_initiator(&self) -> Result<bool> {
+        let negentropy = self.inner.lock()?;
+        Ok(negentropy.is_initiator())
     }
 
     /// Set Initiator: for resuming initiation flow with a new instance
-    pub fn set_initiator(&self) {
-        let mut negentropy = self.inner.write();
+    pub fn set_initiator(&self) -> Result<()> {
+        let mut negentropy = self.inner.lock()?;
         negentropy.set_initiator();
+        Ok(())
     }
 
     pub fn reconcile(&self, query: &[u8]) -> Result<Vec<u8>> {
-        let mut negentropy = self.inner.write();
+        let mut negentropy = self.inner.lock()?;
         Ok(negentropy.reconcile(query)?)
     }
 
     pub fn reconcile_with_ids(&self, query: &[u8]) -> Result<ReconcileWithIds> {
-        let mut negentropy = self.inner.write();
+        let mut negentropy = self.inner.lock()?;
         let mut have_ids = Vec::new();
         let mut need_ids = Vec::new();
         let output: Option<Vec<u8>> =
