@@ -38,7 +38,7 @@ impl TryFrom<u64> for Mode {
 }
 
 /// Item
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Item {
     /// timestamp
     pub timestamp: u64,

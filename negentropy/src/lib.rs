@@ -45,6 +45,7 @@ const BUCKETS: usize = 16;
 const DOUBLE_BUCKETS: usize = BUCKETS * 2;
 
 /// Negentropy
+#[derive(Debug)]
 pub struct Negentropy<'a, T> {
     storage: Storage<'a, T>,
     frame_size_limit: u64,

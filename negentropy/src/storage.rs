@@ -11,6 +11,7 @@ use crate::types::{Accumulator, Bound, Fingerprint, Item};
 use crate::{Error, Id};
 
 /// Storage
+#[derive(Debug)]
 pub enum Storage<'a, T: 'a> {
     /// Borrowed
     Borrowed(&'a T),
@@ -62,7 +63,7 @@ pub trait NegentropyStorageBase {
 }
 
 /// Negentropy Storage Vector
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NegentropyStorageVector {
     items: Vec<Item>,
     sealed: bool,
