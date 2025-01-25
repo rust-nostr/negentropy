@@ -11,7 +11,7 @@ members = ["."]
 
 [lib]
 name = "negentropy_ffi"
-crate-type = ["lib", "cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib"]
 
 [[bin]]
 name = "uniffi-bindgen"
@@ -19,10 +19,7 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 negentropy  = { path = "../negentropy" }
-uniffi = { version = "0.28", features = ["cli"] }
-
-[build-dependencies]
-uniffi = { version = "0.28", features = ["build"] }
+uniffi = { version = "=0.28.3", features = ["cli"] }
 
 [profile.release]
 lto = true
