@@ -2,7 +2,6 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use alloc::string::{String, ToString};
 use core::array::TryFromSliceError;
 use core::fmt;
 
@@ -36,7 +35,7 @@ pub enum Error {
     /// Unsupported protocol version
     UnsupportedProtocolVersion,
     /// Try from slice error
-    TryFromSlice(String),
+    TryFromSlice,
     /// Bad range
     BadRange,
 }
@@ -62,14 +61,14 @@ impl fmt::Display for Error {
             Self::UnsupportedProtocolVersion => {
                 write!(f, "server does not support our negentropy protocol version")
             }
-            Self::TryFromSlice(e) => write!(f, "Try from slice: {}", e),
+            Self::TryFromSlice => write!(f, "could not convert slice to array"),
             Self::BadRange => write!(f, "bad range"),
         }
     }
 }
 
 impl From<TryFromSliceError> for Error {
-    fn from(e: TryFromSliceError) -> Self {
-        Self::TryFromSlice(e.to_string())
+    fn from(_: TryFromSliceError) -> Self {
+        Self::TryFromSlice
     }
 }
