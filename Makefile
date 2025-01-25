@@ -17,6 +17,7 @@ graph:
 
 clean:
 	cargo clean
+	cd negentropy-ffi && cargo clean
 
 loc:
 	@echo "--- Counting lines of .rs files (LOC):" && find negentropy* -type f -name "*.rs" -exec cat {} \; | wc -l
