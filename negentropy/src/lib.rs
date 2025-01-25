@@ -4,6 +4,7 @@
 
 //! Rust implementation of the negentropy set-reconciliation protocol.
 
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![cfg_attr(bench, feature(test))]
 #![cfg_attr(not(feature = "std"), no_std)]
