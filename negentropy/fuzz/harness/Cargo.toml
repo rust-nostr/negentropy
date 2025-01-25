@@ -5,4 +5,5 @@ edition = "2018"
 publish = false
 
 [dependencies]
-negentropy = { path = "../../" }
+negentropy = { path = "../.." }
+hex = "0.4"

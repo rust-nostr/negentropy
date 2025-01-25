@@ -28,21 +28,10 @@ impl From<negentropy::Id> for Id {
 #[uniffi::export]
 impl Id {
     #[uniffi::constructor]
-    pub fn new(bytes: Vec<u8>) -> Result<Self> {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
         Ok(Self {
-            inner: negentropy::Id::from_hex(&bytes)?,
+            inner: negentropy::Id::from_slice(&bytes)?,
         })
-    }
-
-    #[uniffi::constructor]
-    pub fn from_hex(data: &str) -> Result<Self> {
-        Ok(Self {
-            inner: negentropy::Id::from_hex(data)?,
-        })
-    }
-
-    pub fn to_hex(&self) -> String {
-        self.inner.to_hex()
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {

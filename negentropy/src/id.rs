@@ -2,12 +2,10 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use alloc::string::String;
-use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
 
 use crate::error::Error;
-use crate::{hex, ID_SIZE};
+use crate::ID_SIZE;
 
 /// Bytes
 #[repr(transparent)]
@@ -49,22 +47,6 @@ impl Id {
 
         // Construct
         Ok(Self::new(bytes))
-    }
-
-    /// Construct from hex
-    #[inline]
-    pub fn from_hex<T>(data: T) -> Result<Self, Error>
-    where
-        T: AsRef<[u8]>,
-    {
-        let bytes: Vec<u8> = hex::decode(data)?;
-        Self::from_slice(&bytes)
-    }
-
-    /// Consume the [`crate::Bytes`] struct and return a hex-encoded string
-    #[inline]
-    pub fn to_hex(self) -> String {
-        hex::encode(self.0)
     }
 
     /// Return the inner value

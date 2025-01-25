@@ -2,12 +2,8 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::ops::Deref;
-
-use crate::error::Error;
-use crate::hex;
 
 /// Bytes
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -34,22 +30,6 @@ impl Bytes {
     #[inline]
     pub fn from_slice(slice: &[u8]) -> Self {
         Self::from(slice)
-    }
-
-    /// Construct from hex
-    #[inline]
-    pub fn from_hex<T>(data: T) -> Result<Self, Error>
-    where
-        T: AsRef<[u8]>,
-    {
-        let bytes: Vec<u8> = hex::decode(data)?;
-        Ok(Self::from(bytes))
-    }
-
-    /// Consume the [`Bytes`] struct and return a hex-encoded string
-    #[inline]
-    pub fn to_hex(self) -> String {
-        hex::encode(self.0)
     }
 
     /// Return the inner value

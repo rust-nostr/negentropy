@@ -6,8 +6,6 @@ use std::sync::Arc;
 
 use uniffi::Object;
 
-use crate::error::Result;
-
 #[derive(Object)]
 pub struct Bytes {
     inner: negentropy::Bytes,
@@ -33,17 +31,6 @@ impl Bytes {
         Arc::new(Self {
             inner: negentropy::Bytes::new(bytes),
         })
-    }
-
-    #[uniffi::constructor]
-    pub fn from_hex(data: String) -> Result<Arc<Self>> {
-        Ok(Arc::new(Self {
-            inner: negentropy::Bytes::from_hex(data)?,
-        }))
-    }
-
-    pub fn to_hex(&self) -> String {
-        self.inner.clone().to_hex()
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {

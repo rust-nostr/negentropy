@@ -26,7 +26,10 @@ fn main() {
         if items[0] == "item" {
             let created = items[1].parse::<u64>().unwrap();
             let id = items[2];
-            storage.insert(created, Id::from_hex(id).unwrap()).unwrap();
+            let bytes = hex::decode(id).unwrap();
+            storage
+                .insert(created, Id::from_slice(&bytes).unwrap())
+                .unwrap();
         } else if items[0] == "seal" {
             storage.seal().unwrap();
             break;
@@ -46,7 +49,7 @@ fn main() {
             if frame_size_limit > 0 && q.len() / 2 > frame_size_limit {
                 panic!("frame_size_limit exceeded");
             }
-            println!("msg,{}", q.to_hex());
+            println!("msg,{}", hex::encode(q));
         } else if items[0] == "msg" {
             let mut q = String::new();
 
@@ -57,25 +60,28 @@ fn main() {
             if ne.is_initiator() {
                 let mut have_ids = Vec::new();
                 let mut need_ids = Vec::new();
+                let bytes = hex::decode(q).unwrap();
                 let resp = ne
-                    .reconcile_with_ids(&Bytes::from_hex(q).unwrap(), &mut have_ids, &mut need_ids)
+                    .reconcile_with_ids(&Bytes::new(bytes), &mut have_ids, &mut need_ids)
                     .unwrap();
 
                 for id in have_ids.into_iter() {
-                    println!("have,{}", id.to_hex());
+                    println!("have,{}", hex::encode(id.as_bytes()));
                 }
                 for id in need_ids.into_iter() {
-                    println!("need,{}", id.to_hex());
+                    println!("need,{}", hex::encode(id.as_bytes()));
                 }
 
                 if let Some(resp) = resp {
-                    q = resp.to_hex();
+                    q = hex::encode(resp);
                 } else {
                     println!("done");
                     continue;
                 }
             } else {
-                q = ne.reconcile(&Bytes::from_hex(q).unwrap()).unwrap().to_hex();
+                let bytes = hex::decode(q).unwrap();
+                let out = ne.reconcile(&Bytes::new(bytes)).unwrap();
+                q = hex::encode(out);
             }
 
             if frame_size_limit > 0 && q.len() / 2 > frame_size_limit {

@@ -6,8 +6,6 @@ use alloc::string::{String, ToString};
 use core::array::TryFromSliceError;
 use core::fmt;
 
-use crate::hex;
-
 /// Error
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
@@ -37,8 +35,6 @@ pub enum Error {
     InvalidProtocolVersion,
     /// Unsupported protocol version
     UnsupportedProtocolVersion,
-    /// Hex error
-    Hex(hex::Error),
     /// Try from slice error
     TryFromSlice(String),
     /// Bad range
@@ -66,16 +62,9 @@ impl fmt::Display for Error {
             Self::UnsupportedProtocolVersion => {
                 write!(f, "server does not support our negentropy protocol version")
             }
-            Self::Hex(e) => write!(f, "Hex: {}", e),
             Self::TryFromSlice(e) => write!(f, "Try from slice: {}", e),
             Self::BadRange => write!(f, "bad range"),
         }
-    }
-}
-
-impl From<hex::Error> for Error {
-    fn from(e: hex::Error) -> Self {
-        Self::Hex(e)
     }
 }
 

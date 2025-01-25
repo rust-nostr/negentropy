@@ -9,63 +9,56 @@ fn main() {
     storage_client
         .insert(
             0,
-            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                .unwrap(),
+            Id::from_slice(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
         )
         .unwrap();
     storage_client
         .insert(
             1,
-            Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-                .unwrap(),
+            Id::from_slice(b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
         )
         .unwrap();
     storage_client.seal().unwrap();
     let mut client = Negentropy::new(storage_client, 0).unwrap();
     let init_output = client.initiate().unwrap();
-    println!("Initiator Output: {}", init_output.clone().to_hex());
+    println!("Initiator Output: {:x?}", init_output.clone());
 
     // Relay
     let mut storage_relay = NegentropyStorageVector::new();
     storage_relay
         .insert(
             0,
-            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                .unwrap(),
+            Id::from_slice(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             2,
-            Id::from_hex("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
-                .unwrap(),
+            Id::from_slice(b"cccccccccccccccccccccccccccccccc").unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             3,
-            Id::from_hex("1111111111111111111111111111111111111111111111111111111111111111")
-                .unwrap(),
+            Id::from_slice(b"11111111111111111111111111111111").unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             5,
-            Id::from_hex("2222222222222222222222222222222222222222222222222222222222222222")
-                .unwrap(),
+            Id::from_slice(b"22222222222222222222222222222222").unwrap(),
         )
         .unwrap();
     storage_relay
         .insert(
             10,
-            Id::from_hex("3333333333333333333333333333333333333333333333333333333333333333")
-                .unwrap(),
+            Id::from_slice(b"33333333333333333333333333333333").unwrap(),
         )
         .unwrap();
     storage_relay.seal().unwrap();
     let mut relay = Negentropy::new(storage_relay, 0).unwrap();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
-    println!("Reconcile Output: {}", reconcile_output.clone().to_hex());
+    println!("Reconcile Output: {:x?}", reconcile_output.clone());
 
     // Client
     let mut have_ids = Vec::new();
@@ -77,7 +70,7 @@ fn main() {
         "Have IDs: {}",
         have_ids
             .into_iter()
-            .map(|b| b.to_hex())
+            .map(|b| format!("{:x?}", b))
             .collect::<Vec<_>>()
             .join("")
     );
@@ -85,7 +78,7 @@ fn main() {
         "Need IDs: {}",
         need_ids
             .into_iter()
-            .map(|b| b.to_hex())
+            .map(|b| format!("{:x?}", b))
             .collect::<Vec<_>>()
             .join("")
     );

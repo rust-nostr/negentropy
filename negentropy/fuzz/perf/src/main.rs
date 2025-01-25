@@ -13,15 +13,23 @@ fn main() {
     storage_client
         .insert(
             0,
-            Id::from_hex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-                .unwrap(),
+            Id::from_slice(&[
+                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+                0xaa, 0xaa, 0xaa, 0xaa,
+            ])
+            .unwrap(),
         )
         .unwrap();
     storage_client
         .insert(
             1,
-            Id::from_hex("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-                .unwrap(),
+            Id::from_slice(&[
+                0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+                0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb, 0xbb,
+                0xbb, 0xbb, 0xbb, 0xbb,
+            ])
+            .unwrap(),
         )
         .unwrap();
     storage_client.seal().unwrap();
@@ -35,7 +43,7 @@ fn main() {
     println!("Relay items: {}", items.len());
     for (index, item) in items.into_iter().enumerate() {
         storage_relay
-            .insert(index as u64, Id::from_hex(item).unwrap())
+            .insert(index as u64, Id::from_slice(&item).unwrap())
             .unwrap();
     }
     storage_relay.seal().unwrap();
@@ -54,24 +62,24 @@ fn main() {
     println!("Client reconcile took {} ms", now.elapsed().as_millis());
 }
 
-fn relay_set() -> Vec<String> {
-    let characters = "abc";
-    let length = 64;
+fn relay_set() -> Vec<Vec<u8>> {
+    let characters = b"abc";
+    let length = 32;
     let max = 1_000_000;
     generate_combinations(characters, length, max)
 }
 
-fn generate_combinations(characters: &str, length: usize, max: usize) -> Vec<String> {
-    let mut combinations = Vec::new();
-    let mut current = String::new();
+fn generate_combinations(characters: &[u8], length: usize, max: usize) -> Vec<Vec<u8>> {
+    let mut combinations = Vec::with_capacity(max);
+    let mut current = Vec::with_capacity(length);
     generate_combinations_recursive(&mut combinations, &mut current, characters, length, 0, max);
     combinations
 }
 
 fn generate_combinations_recursive(
-    combinations: &mut Vec<String>,
-    current: &mut String,
-    characters: &str,
+    combinations: &mut Vec<Vec<u8>>,
+    current: &mut Vec<u8>,
+    characters: &[u8],
     length: usize,
     _index: usize,
     max: usize,
@@ -81,9 +89,9 @@ fn generate_combinations_recursive(
         return;
     }
 
-    for char in characters.chars() {
+    for byte in characters.iter() {
         if combinations.len() < max {
-            current.push(char);
+            current.push(*byte);
             generate_combinations_recursive(
                 combinations,
                 current,
