@@ -25,7 +25,7 @@ pub struct ReconcileWithIds {
 
 #[derive(Object)]
 pub struct Negentropy {
-    inner: Mutex<negentropy::Negentropy<negentropy::NegentropyStorageVector>>,
+    inner: Mutex<negentropy::Negentropy<'static, negentropy::NegentropyStorageVector>>,
 }
 
 #[uniffi::export]
@@ -36,7 +36,7 @@ impl Negentropy {
     #[uniffi::constructor]
     pub fn new(storage: &NegentropyStorageVector, frame_size_limit: Option<u64>) -> Result<Self> {
         Ok(Self {
-            inner: Mutex::new(negentropy::Negentropy::new(
+            inner: Mutex::new(negentropy::Negentropy::owned(
                 storage.to_inner()?,
                 frame_size_limit.unwrap_or_default(),
             )?),

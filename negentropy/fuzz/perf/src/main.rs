@@ -33,7 +33,7 @@ fn main() {
         )
         .unwrap();
     storage_client.seal().unwrap();
-    let mut client = Negentropy::new(storage_client, 0).unwrap();
+    let mut client = Negentropy::borrowed(&storage_client, 0).unwrap();
     let now = Instant::now();
     let init_output = client.initiate().unwrap();
     println!("Client init took {} ms", now.elapsed().as_millis());
@@ -47,7 +47,7 @@ fn main() {
             .unwrap();
     }
     storage_relay.seal().unwrap();
-    let mut relay = Negentropy::new(storage_relay, 0).unwrap();
+    let mut relay = Negentropy::borrowed(&storage_relay, 0).unwrap();
     let now = Instant::now();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
     println!("Relay reconcile took {} ms", now.elapsed().as_millis());

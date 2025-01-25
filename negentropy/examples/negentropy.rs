@@ -19,7 +19,7 @@ fn main() {
         )
         .unwrap();
     storage_client.seal().unwrap();
-    let mut client = Negentropy::new(storage_client, 0).unwrap();
+    let mut client = Negentropy::borrowed(&storage_client, 0).unwrap();
     let init_output = client.initiate().unwrap();
     println!("Initiator Output: {:x?}", init_output.clone());
 
@@ -56,7 +56,7 @@ fn main() {
         )
         .unwrap();
     storage_relay.seal().unwrap();
-    let mut relay = Negentropy::new(storage_relay, 0).unwrap();
+    let mut relay = Negentropy::borrowed(&storage_relay, 0).unwrap();
     let reconcile_output = relay.reconcile(&init_output).unwrap();
     println!("Reconcile Output: {:x?}", reconcile_output.clone());
 

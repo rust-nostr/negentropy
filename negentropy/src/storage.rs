@@ -5,9 +5,29 @@
 //! Module that contains the various storage implementations
 
 use alloc::vec::Vec;
+use core::ops::Deref;
 
 use crate::types::{Accumulator, Bound, Fingerprint, Item};
 use crate::{Error, Id};
+
+/// Storage
+pub enum Storage<'a, T: 'a> {
+    /// Borrowed
+    Borrowed(&'a T),
+    /// Owned
+    Owned(T),
+}
+
+impl<T> Deref for Storage<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(b) => b,
+            Self::Owned(b) => b,
+        }
+    }
+}
 
 /// NegentropyStorageBase
 pub trait NegentropyStorageBase {
@@ -46,56 +66,6 @@ pub trait NegentropyStorageBase {
 pub struct NegentropyStorageVector {
     items: Vec<Item>,
     sealed: bool,
-}
-
-impl NegentropyStorageBase for NegentropyStorageVector {
-    fn size(&self) -> Result<usize, Error> {
-        self.check_sealed()?;
-        Ok(self.items.len())
-    }
-
-    fn get_item(&self, i: usize) -> Result<Option<Item>, Error> {
-        self.check_sealed()?;
-        Ok(self.items.get(i).copied())
-    }
-
-    fn iterate(
-        &self,
-        begin: usize,
-        end: usize,
-        cb: &mut dyn FnMut(Item, usize) -> Result<bool, Error>,
-    ) -> Result<(), Error> {
-        self.check_sealed()?;
-        self.check_bounds(begin, end)?;
-
-        for i in begin..end {
-            if !cb(self.items[i], i)? {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn find_lower_bound(&self, mut first: usize, last: usize, value: &Bound) -> usize {
-        let mut count: usize = last - first;
-
-        while count > 0 {
-            let mut it: usize = first;
-            let step: usize = count / 2;
-            it += step;
-
-            if self.items[it] < value.item {
-                it += 1;
-                first = it;
-                count -= step + 1;
-            } else {
-                count = step;
-            }
-        }
-
-        first
-    }
 }
 
 impl NegentropyStorageVector {
@@ -157,5 +127,55 @@ impl NegentropyStorageVector {
             return Err(Error::BadRange);
         }
         Ok(())
+    }
+}
+
+impl NegentropyStorageBase for NegentropyStorageVector {
+    fn size(&self) -> Result<usize, Error> {
+        self.check_sealed()?;
+        Ok(self.items.len())
+    }
+
+    fn get_item(&self, i: usize) -> Result<Option<Item>, Error> {
+        self.check_sealed()?;
+        Ok(self.items.get(i).copied())
+    }
+
+    fn iterate(
+        &self,
+        begin: usize,
+        end: usize,
+        cb: &mut dyn FnMut(Item, usize) -> Result<bool, Error>,
+    ) -> Result<(), Error> {
+        self.check_sealed()?;
+        self.check_bounds(begin, end)?;
+
+        for i in begin..end {
+            if !cb(self.items[i], i)? {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn find_lower_bound(&self, mut first: usize, last: usize, value: &Bound) -> usize {
+        let mut count: usize = last - first;
+
+        while count > 0 {
+            let mut it: usize = first;
+            let step: usize = count / 2;
+            it += step;
+
+            if self.items[it] < value.item {
+                it += 1;
+                first = it;
+                count -= step + 1;
+            } else {
+                count = step;
+            }
+        }
+
+        first
     }
 }

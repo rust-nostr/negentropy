@@ -38,7 +38,7 @@ fn main() {
         }
     }
 
-    let mut ne = Negentropy::new(storage, frame_size_limit as u64).unwrap();
+    let mut ne = Negentropy::borrowed(&storage, frame_size_limit as u64).unwrap();
 
     for line in io::stdin().lock().lines() {
         let line_unwrapped = line.unwrap();

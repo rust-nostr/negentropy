@@ -36,7 +36,7 @@ pub use self::constants::{FINGERPRINT_SIZE, ID_SIZE, PROTOCOL_VERSION};
 use self::encoding::{decode_var_int, encode_var_int, get_byte_array, get_bytes};
 pub use self::error::Error;
 pub use self::id::Id;
-pub use self::storage::{NegentropyStorageBase, NegentropyStorageVector};
+pub use self::storage::{NegentropyStorageBase, NegentropyStorageVector, Storage};
 use self::types::Mode;
 pub use self::types::{Bound, Item};
 
@@ -45,22 +45,22 @@ const BUCKETS: usize = 16;
 const DOUBLE_BUCKETS: usize = BUCKETS * 2;
 
 /// Negentropy
-pub struct Negentropy<T> {
-    storage: T,
+pub struct Negentropy<'a, T> {
+    storage: Storage<'a, T>,
     frame_size_limit: u64,
     is_initiator: bool,
     last_timestamp_in: u64,
     last_timestamp_out: u64,
 }
 
-impl<T> Negentropy<T>
+impl<'a, T> Negentropy<'a, T>
 where
     T: NegentropyStorageBase,
 {
     /// Create new [`Negentropy`] instance
     ///
     /// Frame size limit must be `equal to 0` or `greater than 4096`
-    pub fn new(storage: T, frame_size_limit: u64) -> Result<Self, Error> {
+    pub fn new(storage: Storage<'a, T>, frame_size_limit: u64) -> Result<Self, Error> {
         if frame_size_limit != 0 && frame_size_limit < 4096 {
             return Err(Error::FrameSizeLimitTooSmall);
         }
@@ -72,6 +72,20 @@ where
             last_timestamp_in: 0,
             last_timestamp_out: 0,
         })
+    }
+
+    /// Create new [`Negentropy`] instance from owned storage
+    ///
+    /// Frame size limit must be `equal to 0` or `greater than 4096`
+    pub fn owned(storage: T, frame_size_limit: u64) -> Result<Self, Error> {
+        Self::new(Storage::Owned(storage), frame_size_limit)
+    }
+
+    /// Create new [`Negentropy`] instance from owned storage
+    ///
+    /// Frame size limit must be `equal to 0` or `greater than 4096`
+    pub fn borrowed(storage: &'a T, frame_size_limit: u64) -> Result<Self, Error> {
+        Self::new(Storage::Borrowed(storage), frame_size_limit)
     }
 
     /// Initiate reconciliation set
@@ -457,7 +471,7 @@ mod tests {
             .unwrap();
         storage_client.seal().unwrap();
 
-        let mut client = Negentropy::new(storage_client, 0).unwrap();
+        let mut client = Negentropy::new(Storage::Borrowed(&storage_client), 0).unwrap();
         let init_output = client.initiate().unwrap();
 
         // Relay
@@ -513,7 +527,7 @@ mod tests {
             )
             .unwrap();
         storage_relay.seal().unwrap();
-        let mut relay = Negentropy::new(storage_relay, 0).unwrap();
+        let mut relay = Negentropy::new(Storage::Borrowed(&storage_relay), 0).unwrap();
         let reconcile_output = relay.reconcile(&init_output).unwrap();
 
         // Client
