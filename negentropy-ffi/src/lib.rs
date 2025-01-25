@@ -1,18 +1,15 @@
 // Copyright (c) 2023 Yuki Kishimoto
 // Distributed under the MIT software license
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use uniffi::{Object, Record};
 
-mod bytes;
 mod error;
 mod id;
 mod storage;
 
-pub use self::bytes::Bytes;
 pub use self::error::NegentropyError;
 use self::error::Result;
 pub use self::storage::NegentropyStorageVector;
@@ -22,7 +19,7 @@ use crate::id::Id;
 pub struct ReconcileWithIds {
     pub have_ids: Vec<Arc<Id>>,
     pub need_ids: Vec<Arc<Id>>,
-    pub output: Option<Arc<Bytes>>,
+    pub output: Option<Vec<u8>>,
 }
 
 #[derive(Object)]
@@ -49,9 +46,9 @@ impl Negentropy {
     }
 
     /// Initiate reconciliation set
-    pub fn initiate(&self) -> Result<Arc<Bytes>> {
+    pub fn initiate(&self) -> Result<Vec<u8>> {
         let mut negentropy = self.inner.write();
-        Ok(Arc::new(negentropy.initiate()?.into()))
+        Ok(negentropy.initiate()?)
     }
 
     pub fn is_initiator(&self) -> bool {
@@ -64,21 +61,21 @@ impl Negentropy {
         negentropy.set_initiator();
     }
 
-    pub fn reconcile(&self, query: &Bytes) -> Result<Arc<Bytes>> {
+    pub fn reconcile(&self, query: &[u8]) -> Result<Vec<u8>> {
         let mut negentropy = self.inner.write();
-        Ok(Arc::new(negentropy.reconcile(query.deref())?.into()))
+        Ok(negentropy.reconcile(query)?)
     }
 
-    pub fn reconcile_with_ids(&self, query: &Bytes) -> Result<ReconcileWithIds> {
+    pub fn reconcile_with_ids(&self, query: &[u8]) -> Result<ReconcileWithIds> {
         let mut negentropy = self.inner.write();
         let mut have_ids = Vec::new();
         let mut need_ids = Vec::new();
-        let output: Option<negentropy::Bytes> =
-            negentropy.reconcile_with_ids(query.deref(), &mut have_ids, &mut need_ids)?;
+        let output: Option<Vec<u8>> =
+            negentropy.reconcile_with_ids(query, &mut have_ids, &mut need_ids)?;
         Ok(ReconcileWithIds {
             have_ids: have_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
             need_ids: need_ids.into_iter().map(|id| Arc::new(id.into())).collect(),
-            output: output.map(|o| Arc::new(o.into())),
+            output,
         })
     }
 }

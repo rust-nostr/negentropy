@@ -23,7 +23,6 @@ use core::convert::TryFrom;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 
-mod bytes;
 mod constants;
 mod encoding;
 mod error;
@@ -32,7 +31,6 @@ mod sha256;
 mod storage;
 mod types;
 
-pub use self::bytes::Bytes;
 pub use self::constants::{FINGERPRINT_SIZE, ID_SIZE, PROTOCOL_VERSION};
 use self::encoding::{decode_var_int, encode_var_int, get_byte_array, get_bytes};
 pub use self::error::Error;
@@ -76,7 +74,7 @@ where
     }
 
     /// Initiate reconciliation set
-    pub fn initiate(&mut self) -> Result<Bytes, Error> {
+    pub fn initiate(&mut self) -> Result<Vec<u8>, Error> {
         if self.is_initiator {
             return Err(Error::AlreadyBuiltInitialMessage);
         }
@@ -87,7 +85,7 @@ where
 
         output.extend(self.split_range(0, self.storage.size()?, Bound::with_timestamp(MAX_U64))?);
 
-        Ok(Bytes::from(output))
+        Ok(output)
     }
 
     /// Check if this instance has been used to create an initial message
@@ -101,7 +99,7 @@ where
     }
 
     /// Reconcile (server method)
-    pub fn reconcile(&mut self, query: &Bytes) -> Result<Bytes, Error> {
+    pub fn reconcile(&mut self, query: &[u8]) -> Result<Vec<u8>, Error> {
         if self.is_initiator {
             return Err(Error::Initiator);
         }
@@ -112,15 +110,15 @@ where
     /// Reconcile (client method)
     pub fn reconcile_with_ids(
         &mut self,
-        query: &Bytes,
+        query: &[u8],
         have_ids: &mut Vec<Id>,
         need_ids: &mut Vec<Id>,
-    ) -> Result<Option<Bytes>, Error> {
+    ) -> Result<Option<Vec<u8>>, Error> {
         if !self.is_initiator {
             return Err(Error::NonInitiator);
         }
 
-        let output: Bytes = self.reconcile_aux(query, have_ids, need_ids)?;
+        let output: Vec<u8> = self.reconcile_aux(query, have_ids, need_ids)?;
         if output.len() == 1 {
             return Ok(None);
         }
@@ -130,17 +128,15 @@ where
 
     fn reconcile_aux(
         &mut self,
-        query: &Bytes,
+        mut query: &[u8],
         have_ids: &mut Vec<Id>,
         need_ids: &mut Vec<Id>,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Vec<u8>, Error> {
         self.last_timestamp_in = 0;
         self.last_timestamp_out = 0;
 
         let mut full_output: Vec<u8> = Vec::with_capacity(1);
         full_output.push(PROTOCOL_VERSION as u8);
-
-        let mut query: &[u8] = query.as_ref();
 
         let protocol_version: u64 = get_byte_array::<1>(&mut query)?
             .first()
@@ -156,7 +152,7 @@ where
             if self.is_initiator {
                 return Err(Error::UnsupportedProtocolVersion);
             } else {
-                return Ok(Bytes::from(full_output));
+                return Ok(full_output);
             }
         }
 
@@ -284,7 +280,7 @@ where
             prev_bound = curr_bound;
         }
 
-        Ok(Bytes::from(full_output))
+        Ok(full_output)
     }
 
     fn split_range(

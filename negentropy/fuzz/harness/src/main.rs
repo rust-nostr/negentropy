@@ -7,7 +7,7 @@
 use std::env;
 use std::io::{self, BufRead};
 
-use negentropy::{Bytes, Id, Negentropy, NegentropyStorageVector};
+use negentropy::{Id, Negentropy, NegentropyStorageVector};
 
 fn main() {
     let frame_size_limit_env_var = env::var("FRAMESIZELIMIT");
@@ -62,7 +62,7 @@ fn main() {
                 let mut need_ids = Vec::new();
                 let bytes = hex::decode(q).unwrap();
                 let resp = ne
-                    .reconcile_with_ids(&Bytes::new(bytes), &mut have_ids, &mut need_ids)
+                    .reconcile_with_ids(&bytes, &mut have_ids, &mut need_ids)
                     .unwrap();
 
                 for id in have_ids.into_iter() {
@@ -80,7 +80,7 @@ fn main() {
                 }
             } else {
                 let bytes = hex::decode(q).unwrap();
-                let out = ne.reconcile(&Bytes::new(bytes)).unwrap();
+                let out = ne.reconcile(&bytes).unwrap();
                 q = hex::encode(out);
             }
 
