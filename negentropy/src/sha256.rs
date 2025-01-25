@@ -17,11 +17,7 @@ const SHA256_INIT: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-pub fn hash<T>(input: T) -> [u8; 32]
-where
-    T: AsRef<[u8]>,
-{
-    let mut data: Vec<u8> = input.as_ref().to_vec();
+pub(crate) fn hash(mut data: Vec<u8>) -> [u8; 32] {
     let original_len: usize = data.len();
     let bit_len: u64 = (original_len * 8) as u64;
 
@@ -167,7 +163,7 @@ mod tests {
     #[test]
     fn test_sha256() {
         for (data, expected) in HASHES.iter() {
-            let hash = hash(data);
+            let hash = hash(data.as_bytes().to_vec());
             assert_eq!(&hash, expected);
         }
     }
