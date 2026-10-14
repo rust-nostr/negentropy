@@ -220,6 +220,12 @@ where
                 Mode::IdList => {
                     let num_ids: u64 = decode_var_int(&mut query);
 
+                    // The count comes from the peer: check that the message
+                    // holds that many IDs before reserving room for them.
+                    if num_ids > (query.len() / ID_SIZE) as u64 {
+                        return Err(Error::ParseEndsPrematurely);
+                    }
+
                     #[cfg(feature = "std")]
                     let mut their_elems: HashSet<Id> = HashSet::with_capacity(num_ids as usize);
                     #[cfg(not(feature = "std"))]
@@ -585,6 +591,25 @@ mod tests {
                 ]),
             ]
         )
+    }
+
+    #[test]
+    fn test_id_list_longer_than_message() {
+        let mut storage = NegentropyStorageVector::new();
+        storage.insert(0, Id::from_byte_array([0xaa; 32])).unwrap();
+        storage.seal().unwrap();
+
+        // Version, an infinite upper bound, IdList mode, and a count of 2^34
+        // IDs, with none following. Reserving room for them up front asked for
+        // over a terabyte, and the failed allocation aborted the process.
+        let query = [0x61, 0x00, 0x00, 0x02, 0xc0, 0x80, 0x80, 0x80, 0x00];
+        let mut relay = Negentropy::borrowed(&storage, 0).unwrap();
+        assert_eq!(relay.reconcile(&query), Err(Error::ParseEndsPrematurely));
+
+        // One ID short.
+        let mut query = vec![0x61, 0x00, 0x00, 0x02, 0x02];
+        query.extend([0xbb; ID_SIZE]);
+        assert_eq!(relay.reconcile(&query), Err(Error::ParseEndsPrematurely));
     }
 }
 

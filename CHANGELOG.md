@@ -27,6 +27,12 @@
 
 -->
 
+## Unreleased
+
+### Security
+
+- Reject an ID list whose count exceeds the IDs left in the message, rather than reserving memory for it: a few bytes could make `reconcile` allocate terabytes and abort the process
+
 ## 0.5.1 - 2026/08/16
 
 ### Performance
