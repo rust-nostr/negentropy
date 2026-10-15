@@ -608,7 +608,7 @@ mod tests {
 
         // One ID short.
         let mut query = vec![0x61, 0x00, 0x00, 0x02, 0x02];
-        query.extend([0xbb; ID_SIZE]);
+        query.extend(&[0xbb; ID_SIZE]);
         assert_eq!(relay.reconcile(&query), Err(Error::ParseEndsPrematurely));
     }
 }
