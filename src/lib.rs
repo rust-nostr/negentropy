@@ -382,20 +382,24 @@ where
         Mode::try_from(mode)
     }
 
-    fn decode_timestamp_in(&mut self, encoded: &mut &[u8]) -> Result<u64, Error> {
+    fn decode_timestamp_in(&mut self, encoded: &mut &[u8]) -> u64 {
         let timestamp: u64 = decode_var_int(encoded);
-        let mut timestamp = if timestamp == 0 {
+
+        let mut timestamp: u64 = if timestamp == 0 {
             MAX_U64
         } else {
             timestamp - 1
         };
+
         timestamp = timestamp.saturating_add(self.last_timestamp_in);
+
         self.last_timestamp_in = timestamp;
-        Ok(timestamp)
+
+        timestamp
     }
 
     fn decode_bound(&mut self, encoded: &mut &[u8]) -> Result<Bound, Error> {
-        let timestamp = self.decode_timestamp_in(encoded)?;
+        let timestamp = self.decode_timestamp_in(encoded);
         let len: usize = decode_var_int(encoded) as usize;
         let id: &[u8] = get_bytes(encoded, len)?;
         Bound::with_timestamp_and_id(timestamp, id)
