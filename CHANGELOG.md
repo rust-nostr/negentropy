@@ -27,11 +27,11 @@
 
 -->
 
-## Unreleased
+## 0.5.2 - 2026/10/15
 
 ### Security
 
-- Reject an ID list whose count exceeds the IDs left in the message, rather than reserving memory for it: a few bytes could make `reconcile` allocate terabytes and abort the process
+- Reject an ID list whose count exceeds the IDs left in the message, rather than reserving memory for it (https://github.com/nostrdevkit/negentropy/pull/14)
 
 ## 0.5.1 - 2026/08/16
 
